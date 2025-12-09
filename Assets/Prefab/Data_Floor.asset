@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7623c56ba9d33ff499bffbb1fe28b132, type: 3}
   m_Name: Data_Floor
   m_EditorClassIdentifier: 
-  itemID: 
-  prefab: {fileID: 0}
+  itemID: FloorTile
+  prefab: {fileID: 8480212706665663150, guid: 4b18d56eb45b24693aa26d21734a108e, type: 3}
   categoryTag: 
   logicalSize: {x: 1, y: 1, z: 1}
-  minBounds: {x: 1, y: 1, z: 1}
+  minBounds: {x: 1, y: 0.1, z: 1}
   rules: []
