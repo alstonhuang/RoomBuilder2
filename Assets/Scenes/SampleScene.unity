@@ -459,6 +459,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 3024547d37e00824f9d692dc0e032210, type: 2}
   - {fileID: 11400000, guid: cdc73e799364b2640be0502e0a8df2d6, type: 2}
   - {fileID: 11400000, guid: c47d8f372aa5145e098794e43b218034, type: 2}
+  - {fileID: 11400000, guid: b67108cb68971da42a8ff1cf610c29e3, type: 2}
   themeDatabase:
   - {fileID: 11400000, guid: 021b0f2047fc8b840913e282cf6b34a9, type: 2}
   themeToBuild: LivingRoom

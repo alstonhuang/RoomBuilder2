@@ -71,17 +71,23 @@ namespace MyGame.Adapters.Unity
                 // 注意：這裡的 node.position 已經包含了正確的 Y 軸資訊 (由 StructureGenerator 計算)
                 // 或者是 0 (由家具生成器計算)
                 Vector3 pos = new Vector3(node.position.x, node.position.y, node.position.z);
-                
+
+                // 👇👇👇【補上這一段】👇👇👇
+                Quaternion rot = Quaternion.Euler(node.rotation.x, node.rotation.y, node.rotation.z);
+                // 👆👆👆
+
                 if (!string.IsNullOrEmpty(node.parentID) && spawned.ContainsKey(node.parentID))
                 {
                     go.transform.SetParent(spawned[node.parentID]);
                     go.transform.localPosition = pos;
+                    go.transform.localRotation = rot; // 👈 這裡也要設
                 }
                 else
                 {
                     go.transform.SetParent(transform);
                     // 加上 RoomBuilder 本身的位置，這樣你可以拖動 RoomBuilder，房間會跟著動
                     go.transform.position = pos + transform.position;
+                    go.transform.localRotation = rot; // 👈 這裡也要設
                 }
                 spawned[node.instanceID] = go.transform;
             }
