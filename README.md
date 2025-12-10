@@ -22,20 +22,33 @@
 ```text
 Assets/
 ├── Scripts/
-│   ├── Core/                  # [純邏輯層]
+│   ├── Core/                  # [純邏輯層 - 標準版]
 │   │   ├── DataStructures.cs  # 基礎結構 (PropNode, SimpleBounds)
 │   │   ├── Interfaces.cs      # 介面定義 (IPhysicsDriver, ILogger...)
 │   │   ├── RoomGenerator.cs   # 生成器入口 (Director)
 │   │   ├── Containers.cs      # 容器邏輯 (ItemContainer, SplitContainer)
 │   │   ├── Strategies.cs      # 擺放策略 (RandomScatterStrategy)
+│   │   ├── StructureGenerator.cs # 地板/牆壁生成器
 │   │   └── RuleGenerator.cs   # 動態規則生成器
 │   │
 │   └── Adapters/
-│       └── Unity/             # [Unity 實作層]
-│           ├── RoomBuilder.cs # 場景入口腳本
-│           ├── PhysicsAdapter.cs # 物理介面實作
-│           ├── ItemDefinition.cs # 物品設定檔 (ScriptableObject)
-│           └── RoomTheme.cs      # 主題設定檔
+│       ├── Unity/             # [Unity 實作層]
+│       │   ├── RoomBuilder.cs # 場景入口腳本 (支援匯入套件的備用生成器)
+│       │   ├── LoggerAdapter.cs # 日誌適配器
+│       │   ├── ItemLibraryAdapter.cs # 物品庫適配器
+│       │   ├── ItemDefinition.cs # 物品設定檔 (ScriptableObject)
+│       │   └── RoomTheme.cs      # 主題設定檔
+│       │
+│       └── Imported/          # [匯入套件適配層]
+│           └── ImportedCoreMapper.cs # 類型對應器 (MyGame_1.Core → MyGame.Core)
+│
+├── Archive/
+│   └── ImportedCoreBackup/    # [已封存的匯入套件核心] (供參考)
+│       ├── RoomGenerator.cs   # 匯入的生成器 (MonoBehaviour 版本)
+│       ├── RoomBlueprint.cs
+│       ├── SimpleVector3.cs
+│       ├── PropNode.cs
+│       └── ILogger.cs
 ```
 
 ## 🚀 快速開始 (Getting Started)
@@ -61,6 +74,11 @@ Assets/
 *   在 `RoomBuilder` Component 上點擊右鍵 -> **Build**。
 *   或是點擊 **Clear All** 清除場景。
 
+### 選項：使用匯入套件的生成器
+若要使用已封存的匯入套件版本（`MyGame_1.Core.RoomGenerator`）：
+1.  在同一 GameObject 上再掛一個 `RoomGenerator` Component （位於 `Assets/Archive/ImportedCoreBackup/RoomGenerator.cs`）。
+2.  點擊 `RoomBuilder` -> **Build**。系統會自動偵測並使用匯入版本，並透過 `ImportedCoreMapper` 自動轉換型別。
+
 ## 🛠️ 開發與除錯 (Debugging)
 
 *   **Gizmos 視覺化：**
@@ -71,9 +89,32 @@ Assets/
     *   所有 Core 層的訊息會帶有 `[Core]` 前綴。
     *   若生成失敗，請檢查 Console 是否有 `[Error] ID not found` 或 `[Warning] Constraints failed` (空間不足)。
 
+## 📚 架構說明 (Architecture Notes)
+
+### Clean Architecture 分層
+*   **Core Layer (`MyGame.Core`)：** 純 C# 邏輯，引擎無關，易於單元測試。包括生成器、容器、策略等核心演算法。
+*   **Adapter Layer (`MyGame.Adapters.Unity` & `MyGame.Adapters.Imported`)：** 負責引擎整合與舊版本相容性。
+    *   `Unity/` - 標準 Unity MonoBehaviour 實作與 ScriptableObject。
+    *   `Imported/` - 類型轉換適配器，支援匯入套件無縫整合。
+
+### 匯入套件整合策略
+在匯入新套件時若遇到型別衝突，採用「適配器映射」而非直接替換：
+1.  將衝突的舊版本封存至 `Assets/Archive/`（保留歷史參考）。
+2.  在 `Assets/Scripts/Adapters/` 新增映射適配器（如 `ImportedCoreMapper`）。
+3.  在場景入口（如 `RoomBuilder`）提供備用分支邏輯，自動偵測並適配舊版本組件。
+
+這樣既消除編譯衝突，又保留漸進遷移的靈活性。
+
 ## 📝 版本歷程 (Changelog)
 
-### v0.5 - Structure & Physics (Current)
+### v0.6 - Architecture Consolidation (Latest)
+*   **整合匯入套件：** 將匯入的 `MyGame_1.Core` 套件整合至 Clean Architecture，移至 `Assets/Archive/ImportedCoreBackup/` 保留歷史。
+*   **新增適配層：** `ImportedCoreMapper` 支援將匯入的舊版本類型無縫轉換至標準 `MyGame.Core` 型別。
+*   **擴展 RoomBuilder：** 支援備用的匯入 `RoomGenerator` (MonoBehaviour 版本)，於同一 GameObject 時自動偵測並使用，並自動映射輸出。
+*   **消除重複型別：** 刪除重複的 `MyGame_1.Core` 檔案，避免編譯衝突；保留匯入套件版本供參考。
+*   **簡化依賴：** 使用 `ImportedCore` alias 避免命名空間衝突。
+
+### v0.5 - Structure & Physics
 *   新增 `StructureGenerator`：自動鋪設地板並修正 Y 軸高度。
 *   修正 `RoomBuilder`：解決房間中心點浮空問題，將底部對齊 Y=0。
 *   優化 `SnapToGround`：加入 Collider Toggle 機制，解決桌子射線打到自己而浮在空中的 Bug。
