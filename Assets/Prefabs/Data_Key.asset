@@ -15,6 +15,6 @@ MonoBehaviour:
   itemID: Key
   prefab: {fileID: 1113684966663954328, guid: 246ae31f0ec52e04bb3abd7107f5c529, type: 3}
   categoryTag: 
-  logicalSize: {x: 1, y: 1, z: 1}
+  logicalSize: {x: 0.3, y: 0.3, z: 0.3}
   minBounds: {x: 1, y: 1, z: 1}
   rules: []
