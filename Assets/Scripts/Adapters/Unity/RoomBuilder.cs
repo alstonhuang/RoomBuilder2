@@ -18,7 +18,29 @@ namespace MyGame.Adapters.Unity
 
         public RoomBlueprint blueprint;
 
+        // Flags for controlling wall generation based on neighboring rooms
+        private bool m_SkipNorthWallGeneration = false; // +Z side
+        private bool m_SkipSouthWallGeneration = false; // -Z side
+        private bool m_SkipEastWallGeneration = false;  // +X side
+        private bool m_SkipWestWallGeneration = false;  // -X side
+
         private Vector3? cachedWallSize;
+
+        /// <summary>
+        /// Sets flags to skip wall generation on specific sides.
+        /// </summary>
+        /// <param name="skipNorth">True to skip wall generation on the +Z (North) side.</param>
+        /// <param name="skipSouth">True to skip wall generation on the -Z (South) side.</param>
+        /// <param name="skipEast">True to skip wall generation on the +X (East) side.</param>
+        /// <param name="skipWest">True to skip wall generation on the -X (West) side.</param>
+        public void SetWallGenerationFlags(bool skipNorth, bool skipSouth, bool skipEast, bool skipWest)
+        {
+            m_SkipNorthWallGeneration = skipNorth;
+            m_SkipSouthWallGeneration = skipSouth;
+            m_SkipEastWallGeneration = skipEast;
+            m_SkipWestWallGeneration = skipWest;
+            Debug.Log($"[{name}] Wall generation flags set: North={m_SkipNorthWallGeneration}, South={m_SkipSouthWallGeneration}, East={m_SkipEastWallGeneration}, West={m_SkipWestWallGeneration}");
+        }
 
         // ==========================================
         // 1. 新增清除功能
@@ -57,7 +79,9 @@ namespace MyGame.Adapters.Unity
                 var coreCenter = new SimpleVector3(0, roomSize.y / 2, 0);
                 var bounds = new SimpleBounds(coreCenter, new SimpleVector3(roomSize.x, roomSize.y, roomSize.z));
 
-                blueprint = generator.GenerateFromTheme(bounds, themeToBuild);
+                blueprint = generator.GenerateFromTheme(bounds, themeToBuild,
+                                                        m_SkipNorthWallGeneration, m_SkipSouthWallGeneration,
+                                                        m_SkipEastWallGeneration, m_SkipWestWallGeneration);
             }
             Debug.Log($"[{name}] Blueprint generated with {blueprint.nodes.Count} nodes.");
         }
@@ -161,7 +185,7 @@ namespace MyGame.Adapters.Unity
                 // Auto-fix door pieces to match wall dimensions (height/thickness) even if the prefab was authored differently.
                 if (node.itemID.ToLower().Contains("door"))
                 {
-                    AutoSizeDoor(go.transform, defMap);
+                    AutoSizeDoor(go.transform, defMap, node.rotation);
                 }
 
                 spawned[node.instanceID] = go.transform;
@@ -247,25 +271,43 @@ namespace MyGame.Adapters.Unity
             foreach (var c in allColliders) c.enabled = true;
         }
         
-        private void AutoSizeDoor(Transform door, Dictionary<string, ItemDefinition> defMap)
+        private void AutoSizeDoor(Transform door, Dictionary<string, ItemDefinition> defMap, SimpleVector3 nodeRotation)
         {
             if (door == null) return;
 
-            Vector3 wallSize = GetWallSize(defMap);
+            Vector3 wallSize = GetWallSize(defMap); // This is size of a single wall segment
+            
             // Prefer wall height but never exceed the configured room height.
             float targetHeight = wallSize.y > 0 ? Mathf.Min(wallSize.y, roomSize.y) : roomSize.y;
-            float targetWidth  = wallSize.x > 0 ? wallSize.x : 0f;
-            float targetDepth  = wallSize.z > 0 ? wallSize.z : 0f;
+            float targetWidth;
+            float targetDepth;
+
+            // Assuming a standard door width, e.g., 1 unit for now.
+            // Its thickness should match the wall thickness.
+            // If the door is rotated 90/270 degrees (East/West wall), its local X (width) should be the door width,
+            // and its local Z (depth) should be the wall thickness (wallSize.x).
+            // If the door is rotated 0/180 degrees (North/South wall), its local X (width) should be the door width,
+            // and its local Z (depth) should be the wall thickness (wallSize.z).
+
+            float standardDoorWidth = 1.0f; // A reasonable default for a door opening
+
+            float yRotation = nodeRotation.y;
+            if (Mathf.Approximately(yRotation, 90f) || Mathf.Approximately(yRotation, 270f)) // East/West wall
+            {
+                targetWidth = standardDoorWidth;
+                targetDepth = wallSize.x; // Use wall thickness for door depth
+            }
+            else // North/South wall (or default 0/180)
+            {
+                targetWidth = standardDoorWidth;
+                targetDepth = wallSize.z; // Use wall thickness for door depth
+            }
 
             if (!TryGetBounds(door.gameObject, out var doorBounds)) return;
 
             const float minSize = 0.001f;
             Vector3 current = doorBounds.size;
             if (current.x < minSize || current.y < minSize || current.z < minSize) return;
-
-            // If width/depth were unknown, keep current to avoid collapsing to zero.
-            if (targetWidth <= 0f) targetWidth = current.x;
-            if (targetDepth <= 0f) targetDepth = current.z;
 
             Vector3 scaleAdjust = new Vector3(
                 targetWidth / current.x,

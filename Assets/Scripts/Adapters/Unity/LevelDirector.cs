@@ -36,6 +36,15 @@ namespace MyGame.Adapters.Unity
                 {
                     roomBuilder.roomSize = this.roomSize;
                     roomBuilder.themeToBuild = this.themeToBuild;
+
+                    // Determine wall skipping flags
+                    // Keep the east wall so a door can be carved out; only skip the west wall to avoid double thickness.
+                    bool skipEast = false;
+                    bool skipWest = (i > 0); // Let the room on the left provide the shared wall
+
+                    // Set wall generation flags before generating the blueprint (North & South always generated for now)
+                    roomBuilder.SetWallGenerationFlags(false, false, skipEast, skipWest);
+                    
                     roomBuilder.GenerateBlueprint();
                     m_RoomBuilders.Add(roomBuilder);
                 }
@@ -47,10 +56,11 @@ namespace MyGame.Adapters.Unity
             }
             Debug.Log($"Successfully created {m_RoomBuilders.Count} RoomBuilder instances.");
 
-            // 2. Connect rooms
-            Debug.Log("Step 2: Connecting rooms...");
-            ConnectRooms();
-            Debug.Log("Finished connecting rooms.");
+            // 2. Add doors between rooms
+            Debug.Log("Step 2: Adding doors between rooms...");
+            AddDoorsBetweenRooms(); // New method
+            Debug.Log("Finished adding doors.");
+
 
             // 3. Build rooms from modified blueprints
             Debug.Log("Step 3: Building rooms from blueprints...");
@@ -68,147 +78,54 @@ namespace MyGame.Adapters.Unity
             Debug.Log($"--- Level Generation Complete ---");
         }
 
-        private void ConnectRooms()
+        private void AddDoorsBetweenRooms()
         {
             if (m_RoomBuilders.Count < 2)
             {
-                Debug.Log("Not enough rooms to connect.");
+                Debug.Log("Not enough rooms to connect with doors.");
                 return;
             }
 
             for (int i = 0; i < m_RoomBuilders.Count - 1; i++)
             {
-                Debug.Log($"Connecting Room {i} and Room {i + 1}...");
+                Debug.Log($"Adding door between Room {i} and Room {i + 1}...");
                 RoomBuilder roomA = m_RoomBuilders[i];
-                RoomBuilder roomB = m_RoomBuilders[i + 1];
-                CreateOpening(roomA, roomB);
-            }
-        }
+                RoomBuilder roomB = m_RoomBuilders[i + 1]; // Room B is to the East of Room A
 
-        private void CreateOpening(RoomBuilder roomA, RoomBuilder roomB)
-        {
-            RoomBlueprint bpA = roomA.blueprint;
-            RoomBlueprint bpB = roomB.blueprint;
+                // Add the DoorSystem to Room A's blueprint at its East side
+                float doorPosX = roomSize.x / 2; // Position on the +X side of Room A
 
-            // Find the wall to remove in Room A (+X side)
-            float wallAPosX = roomSize.x / 2;
-            float wallBPosX = -roomSize.x / 2;
-            var wallsA = GetWallsOnPlane(bpA, wallAPosX);
-            var wallsB = GetWallsOnPlane(bpB, wallBPosX);
-
-            bool keepA = wallsA.Count > 0 || wallsB.Count == 0; // prefer A if it has walls, or if both empty just pick A
-            bool keepB = !keepA && wallsB.Count > 0;
-
-            if (keepA)
-            {
-                // Remove B walls on the shared plane (dedupe)
-                int removedBAll = RemoveAllWallsOnPlane(bpB, wallBPosX, roomSize.x);
-                // Remove one segment on A to place door
-                bool removedAOne = RemoveSingleWallOnPlane(bpA, wallAPosX);
-                Debug.Log($"Connecting {roomA.name}<->{roomB.name}: keepA=true, removedAOne={removedAOne}, removedBAll={removedBAll}");
-
-                if (removedAOne || removedBAll > 0)
+                // Calculate available range for door placement along the Z-axis of the wall
+                // We need to ensure the door is not placed too close to the corners.
+                // Let's assume a buffer of 1 unit from each corner.
+                float minZ = -roomSize.z / 2 + 1.0f; // 1 unit from corner
+                float maxZ = roomSize.z / 2 - 1.0f;  // 1 unit from corner
+                
+                // If room is too small, just center it
+                if (minZ > maxZ) 
                 {
-                    bpA.nodes.Add(new PropNode
-                    {
-                        instanceID = "Door_" + roomA.name + "_" + roomB.name,
-                        itemID = "DoorSystem",
-                        position = new SimpleVector3(wallAPosX, 0, 0),
-                        rotation = new SimpleVector3(0, 90, 0)
-                    });
-                    // Optional: keep B door for symmetry? skip to avoid double doors.
-                    AddKeyToRoomA(bpA, roomA.name);
+                    minZ = 0;
+                    maxZ = 0;
                 }
-            }
-            else if (keepB)
-            {
-                int removedAAll = RemoveAllWallsOnPlane(bpA, wallAPosX, roomSize.x);
-                bool removedBOne = RemoveSingleWallOnPlane(bpB, wallBPosX);
-                Debug.Log($"Connecting {roomA.name}<->{roomB.name}: keepB=true, removedAAll={removedAAll}, removedBOne={removedBOne}");
+                float randomZ = UnityEngine.Random.Range(minZ, maxZ);
 
-                if (removedBOne || removedAAll > 0)
+                roomA.blueprint.nodes.Add(new PropNode
                 {
-                    bpB.nodes.Add(new PropNode
-                    {
-                        instanceID = "Door_" + roomB.name + "_" + roomA.name,
-                        itemID = "DoorSystem",
-                        position = new SimpleVector3(wallBPosX, 0, 0),
-                        rotation = new SimpleVector3(0, 90, 0)
-                    });
-                    AddKeyToRoomA(bpB, roomB.name);
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"Could not find walls on shared plane between {roomA.name} and {roomB.name}.");
-            }
-        }
-
-        private bool RemoveSingleWallOnPlane(RoomBlueprint bp, float targetX, float epsilon = 0.5f)
-        {
-            int bestIndex = -1;
-            float bestAbsZ = float.MaxValue;
-
-            for (int i = 0; i < bp.nodes.Count; i++)
-            {
-                var n = bp.nodes[i];
-                if (n.itemID != null && n.itemID.Contains("Wall") && Mathf.Abs(n.position.x - targetX) <= epsilon)
+                    instanceID = $"Door_{roomA.name}_{roomB.name}",
+                    itemID = "DoorSystem",
+                    position = new SimpleVector3(doorPosX, 0, randomZ), // Random Z position
+                    rotation = new SimpleVector3(0, 90, 0) // Rotate to face along the X-axis
+                });
+                // Add a Key to the room where the door is placed (Room A)
+                roomA.blueprint.nodes.Add(new PropNode
                 {
-                    float absZ = Mathf.Abs(n.position.z);
-                    if (absZ < bestAbsZ)
-                    {
-                        bestAbsZ = absZ;
-                        bestIndex = i;
-                    }
-                }
+                    instanceID = $"Key_{roomA.name}_{roomB.name}", // Unique ID for key
+                    itemID = "Key",
+                    position = new SimpleVector3(0, 1, 0), // Default position within the room
+                    rotation = new SimpleVector3(0, 0, 0)
+                });
+                Debug.Log($"Added Key node to {roomA.name}.");
             }
-
-            if (bestIndex >= 0)
-            {
-                bp.nodes.RemoveAt(bestIndex);
-                return true;
-            }
-            return false;
-        }
-
-        private int RemoveAllWallsOnPlane(RoomBlueprint bp, float targetX, float epsilon = 0.5f)
-        {
-            int removed = 0;
-            bp.nodes = bp.nodes.FindAll(n =>
-            {
-                if (n.itemID != null && n.itemID.Contains("Wall") && Mathf.Abs(n.position.x - targetX) <= epsilon)
-                {
-                    removed++;
-                    return false;
-                }
-                return true;
-            });
-            return removed;
-        }
-
-        private List<PropNode> GetWallsOnPlane(RoomBlueprint bp, float targetX, float epsilon = 0.5f)
-        {
-            var list = new List<PropNode>();
-            foreach (var n in bp.nodes)
-            {
-                if (n.itemID != null && n.itemID.Contains("Wall") && Mathf.Abs(n.position.x - targetX) <= epsilon)
-                {
-                    list.Add(n);
-                }
-            }
-            return list;
-        }
-
-        private void AddKeyToRoomA(RoomBlueprint bp, string roomName)
-        {
-            bp.nodes.Add(new PropNode
-            {
-                instanceID = "Key_" + roomName,
-                itemID = "Key",
-                position = new SimpleVector3(0, 1, 0),
-                rotation = new SimpleVector3(0, 0, 0)
-            });
-            Debug.Log("Added Key node.");
         }
 
 

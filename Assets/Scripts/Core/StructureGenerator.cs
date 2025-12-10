@@ -52,7 +52,9 @@ namespace MyGame.Core
         } // end of GenerateFloor
 
         // 👇 新增牆壁生成邏輯
-        public List<PropNode> GenerateWalls(SimpleBounds roomBounds, string wallItemID)
+        public List<PropNode> GenerateWalls(SimpleBounds roomBounds, string wallItemID,
+                                            bool skipNorth, bool skipSouth,
+                                            bool skipEast, bool skipWest)
         {
             var nodes = new List<PropNode>();
             SimpleVector3 wallSize = _library.GetItemSize(wallItemID);
@@ -61,44 +63,52 @@ namespace MyGame.Core
 
             float width = roomBounds.size.x;
             float depth = roomBounds.size.z;
-            
-            // 計算邊界位置 (假設 bounds.center 是 0,0)
+
+            // Calculate boundary positions
             float xMin = roomBounds.center.x - width / 2;
             float xMax = roomBounds.center.x + width / 2;
             float zMin = roomBounds.center.z - depth / 2;
             float zMax = roomBounds.center.z + depth / 2;
 
-            // 調整：為了讓牆壁剛好包住地板，我們通常往外推半個牆厚
-            // 但 MVP 先求有，直接蓋在邊線上即可
-
             // 1. 南牆 (South Wall) - 沿著 X 軸，Z 固定在 zMin
             // 面向北 (Rot Y = 0)
-            for (float x = xMin; x < xMax; x += wallSize.x)
+            if (!skipSouth)
             {
-                nodes.Add(CreateWallNode(wallItemID, x + wallSize.x/2, zMin, 0));
+                for (float x = xMin; x < xMax; x += wallSize.x)
+                {
+                    nodes.Add(CreateWallNode(wallItemID, x + wallSize.x/2, zMin, 0));
+                }
             }
 
             // 2. 北牆 (North Wall) - 沿著 X 軸，Z 固定在 zMax
             // 面向南 (Rot Y = 180)
-            for (float x = xMin; x < xMax; x += wallSize.x)
+            if (!skipNorth)
             {
-                nodes.Add(CreateWallNode(wallItemID, x + wallSize.x/2, zMax, 180));
+                for (float x = xMin; x < xMax; x += wallSize.x)
+                {
+                    nodes.Add(CreateWallNode(wallItemID, x + wallSize.x/2, zMax, 180));
+                }
             }
 
             // 3. 西牆 (West Wall) - 沿著 Z 軸，X 固定在 xMin
             // 面向東 (Rot Y = 90)
-            for (float z = zMin; z < zMax; z += wallSize.x) // 注意這裡間距用 wallSize.x (牆寬)
+            if (!skipWest)
             {
-                nodes.Add(CreateWallNode(wallItemID, xMin, z + wallSize.x/2, 90));
+                for (float z = zMin; z < zMax; z += wallSize.x) // 注意這裡間距用 wallSize.x (牆寬)
+                {
+                    nodes.Add(CreateWallNode(wallItemID, xMin, z + wallSize.x/2, 90));
+                }
             }
 
             // 4. 東牆 (East Wall) - 沿著 Z 軸，X 固定在 xMax
             // 面向西 (Rot Y = 270)
-            for (float z = zMin; z < zMax; z += wallSize.x)
+            if (!skipEast)
             {
-                nodes.Add(CreateWallNode(wallItemID, xMax, z + wallSize.x/2, 270));
+                for (float z = zMin; z < zMax; z += wallSize.x)
+                {
+                    nodes.Add(CreateWallNode(wallItemID, xMax, z + wallSize.x/2, 270));
+                }
             }
-
             return nodes;
         } // end of GenerateWalls
 

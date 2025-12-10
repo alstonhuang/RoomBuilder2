@@ -19,7 +19,9 @@ namespace MyGame.Core
             _structureGen = new StructureGenerator(library); 
         } // end of Constructor
 
-        public RoomBlueprint GenerateFromTheme(SimpleBounds roomBounds, string themeID)
+        public RoomBlueprint GenerateFromTheme(SimpleBounds roomBounds, string themeID,
+                                            bool skipNorthWall, bool skipSouthWall,
+                                            bool skipEastWall, bool skipWestWall)
         {
             _logger.Log($"Director: 開始根據主題 '{themeID}' 生成...");
             var bp = new RoomBlueprint();
@@ -35,7 +37,9 @@ namespace MyGame.Core
             // Phase 5.2: 生成牆壁 (Walls) -- 這是新加入的
             // ==========================================
             // 呼叫結構生成器蓋牆壁 (假設 ID 為 "Wall")
-            var wallNodes = _structureGen.GenerateWalls(roomBounds, "Wall");
+            var wallNodes = _structureGen.GenerateWalls(roomBounds, "Wall",
+                                                        skipNorthWall, skipSouthWall,
+                                                        skipEastWall, skipWestWall);
             bp.nodes.AddRange(wallNodes);
 
             // ==========================================
