@@ -1,9 +1,5 @@
-using System.Collections.Generic;
+// Archived: original RoomBlueprint from imported package.
+// See: Assets/Archive/ImportedCoreBackup/RoomBlueprint.cs
 
-namespace MyGame_1.Core
-{
-    public class RoomBlueprint
-    {
-        public List<PropNode> nodes { get; } = new List<PropNode>();
-    }
-}
+// Placeholder to avoid duplicate type definitions.
+

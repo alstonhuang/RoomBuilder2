@@ -1,18 +1,5 @@
-namespace MyGame_1.Core
-{
-    public struct SimpleVector3
-    {
-        public float x;
-        public float y;
-        public float z;
+// Archived: original SimpleVector3 from imported package.
+// See: Assets/Archive/ImportedCoreBackup/SimpleVector3.cs
 
-        public SimpleVector3(float x, float y, float z)
-        {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-        }
+// Placeholder to avoid duplicate type definitions.
 
-        public static SimpleVector3 Zero => new SimpleVector3(0f, 0f, 0f);
-    }
-}

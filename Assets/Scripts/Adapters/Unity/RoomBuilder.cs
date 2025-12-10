@@ -3,6 +3,7 @@ using System.Linq; // 👈 新增這行，為了用 ToList() 安全刪除
 using UnityEngine;
 using MyGame.Core;
 using ILogger = MyGame.Core.ILogger;
+using Imported = MyGame_1.Core;
 
 namespace MyGame.Adapters.Unity
 {
@@ -37,20 +38,32 @@ namespace MyGame.Adapters.Unity
             // 1. 生成前先清除舊的
             Clear();
 
-            ILogger logger = new LoggerAdapter();
-            IItemLibrary library = new ItemLibraryAdapter(database, themeDatabase);
-            RoomGenerator generator = new RoomGenerator(logger, library);
+            // If an imported package generator is present on the same GameObject, use it
+            // and map its blueprint into the Core blueprint. Otherwise use the Core generator.
+            RoomBlueprint blueprint;
+            var importedGen = GetComponent<Imported.RoomGenerator>();
+            if (importedGen != null)
+            {
+                var importedBp = importedGen.GenerateStackDemo();
+                blueprint = MyGame.Adapters.Imported.ImportedCoreMapper.ToCore(importedBp);
+            }
+            else
+            {
+                ILogger logger = new LoggerAdapter();
+                IItemLibrary library = new ItemLibraryAdapter(database, themeDatabase);
+                RoomGenerator generator = new RoomGenerator(logger, library);
 
-            // ==========================================
-            // 2. 修正浮空問題
-            // ==========================================
-            // 舊寫法：new SimpleVector3(0, 0, 0) -> 導致房間一半在地下一半在地上
-            // 新寫法：把中心點往上提 "高度的一半" -> 這樣房間底部就在 0
-            var coreCenter = new SimpleVector3(0, roomSize.y / 2, 0); 
-            
-            var bounds = new SimpleBounds(coreCenter, new SimpleVector3(roomSize.x, roomSize.y, roomSize.z));
-            
-            RoomBlueprint blueprint = generator.GenerateFromTheme(bounds, themeToBuild);
+                // ==========================================
+                // 2. 修正浮空問題
+                // ==========================================
+                // 舊寫法：new SimpleVector3(0, 0, 0) -> 導致房間一半在地下一半在地上
+                // 新寫法：把中心點往上提 "高度的一半" -> 這樣房間底部就在 0
+                var coreCenter = new SimpleVector3(0, roomSize.y / 2, 0);
+
+                var bounds = new SimpleBounds(coreCenter, new SimpleVector3(roomSize.x, roomSize.y, roomSize.z));
+
+                blueprint = generator.GenerateFromTheme(bounds, themeToBuild);
+            }
 
             var spawnedMap = BuildFromBlueprint(blueprint);
             ApplyPhysicsSnapping(spawnedMap, blueprint);

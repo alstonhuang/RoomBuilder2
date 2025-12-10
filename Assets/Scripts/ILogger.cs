@@ -1,8 +1,5 @@
-// Removed duplicate ILogger definition.
-// The canonical ILogger interface lives in `Assets/Scripts/Core/Interfaces.cs` under namespace `MyGame.Core`.
-// This file remains as a harmless placeholder to avoid accidental compile-time removal by external tooling.
+// Archived: duplicate ILogger placeholder from imported package.
+// See: Assets/Archive/ImportedCoreBackup/ILogger.cs
 
-namespace MyGame_1.Core
-{
-    internal static class RemovedILoggerPlaceholder { }
-}
+// Placeholder to avoid duplicate type definitions.
+
