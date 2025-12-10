@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7623c56ba9d33ff499bffbb1fe28b132, type: 3}
+  m_Name: Data_DoorStytem
+  m_EditorClassIdentifier: 
+  itemID: DoorSystem
+  prefab: {fileID: 1230887261166401492, guid: 4479d99dc13552a4da478b0a01cfb7dc, type: 3}
+  categoryTag: 
+  logicalSize: {x: 1, y: 1, z: 1}
+  minBounds: {x: 1, y: 1, z: 1}
+  rules: []

@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &8564520603651773097
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7078974868312655038}
+  - component: {fileID: 5987178354778751727}
+  m_Layer: 0
+  m_Name: RoomBuilder
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7078974868312655038
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8564520603651773097}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5987178354778751727
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8564520603651773097}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 948203d8406415741b8a0fe4f7be44f0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  database:
+  - {fileID: 11400000, guid: 3024547d37e00824f9d692dc0e032210, type: 2}
+  - {fileID: 11400000, guid: cdc73e799364b2640be0502e0a8df2d6, type: 2}
+  - {fileID: 11400000, guid: c47d8f372aa5145e098794e43b218034, type: 2}
+  - {fileID: 11400000, guid: b67108cb68971da42a8ff1cf610c29e3, type: 2}
+  - {fileID: 11400000, guid: 3ef55a35372e3c74ea181d39bf1e064c, type: 2}
+  - {fileID: 11400000, guid: d82d99a405b897e49af167d7f0439127, type: 2}
+  themeDatabase:
+  - {fileID: 11400000, guid: 021b0f2047fc8b840913e282cf6b34a9, type: 2}
+  themeToBuild: LivingRoom
+  roomSize: {x: 10, y: 1, z: 10}

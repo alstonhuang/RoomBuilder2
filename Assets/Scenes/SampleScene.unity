@@ -206,7 +206,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -426,7 +426,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1471265958
+--- !u!1 &1973934715
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -434,43 +434,38 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1471265960}
-  - component: {fileID: 1471265959}
+  - component: {fileID: 1973934717}
+  - component: {fileID: 1973934716}
   m_Layer: 0
-  m_Name: RoomBuilder
+  m_Name: LevelDirector
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1471265959
+--- !u!114 &1973934716
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1471265958}
+  m_GameObject: {fileID: 1973934715}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 948203d8406415741b8a0fe4f7be44f0, type: 3}
+  m_Script: {fileID: 11500000, guid: fd2516a6d15e00c45a57b98e9b0c1d6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  database:
-  - {fileID: 11400000, guid: 3024547d37e00824f9d692dc0e032210, type: 2}
-  - {fileID: 11400000, guid: cdc73e799364b2640be0502e0a8df2d6, type: 2}
-  - {fileID: 11400000, guid: c47d8f372aa5145e098794e43b218034, type: 2}
-  - {fileID: 11400000, guid: b67108cb68971da42a8ff1cf610c29e3, type: 2}
-  themeDatabase:
-  - {fileID: 11400000, guid: 021b0f2047fc8b840913e282cf6b34a9, type: 2}
+  roomsToClear: 3
+  roomSize: {x: 10, y: 3, z: 10}
   themeToBuild: LivingRoom
-  roomSize: {x: 10, y: 1, z: 10}
---- !u!4 &1471265960
+  roomBuilderPrefab: {fileID: 8564520603651773097, guid: b670c64d949661a41b933a9492863223, type: 3}
+--- !u!4 &1973934717
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1471265958}
+  m_GameObject: {fileID: 1973934715}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -486,4 +481,4 @@ SceneRoots:
   - {fileID: 330585546}
   - {fileID: 410087041}
   - {fileID: 832575519}
-  - {fileID: 1471265960}
+  - {fileID: 1973934717}

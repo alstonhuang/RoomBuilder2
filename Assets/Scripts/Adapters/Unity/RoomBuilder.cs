@@ -16,6 +16,10 @@ namespace MyGame.Adapters.Unity
         public string themeToBuild = "LivingRoom";
         public Vector3 roomSize = new Vector3(10, 2, 10); // 高度設為 2 比較容易看清楚
 
+        public RoomBlueprint blueprint;
+
+        private Vector3? cachedWallSize;
+
         // ==========================================
         // 1. 新增清除功能
         // ==========================================
@@ -32,15 +36,12 @@ namespace MyGame.Adapters.Unity
             Debug.Log("[RoomBuilder] 已清除所有生成的物件。");
         }
 
-        [ContextMenu("Build")]
-        public void Build()
+        [ContextMenu("Generate Blueprint")]
+        public void GenerateBlueprint()
         {
-            // 1. 生成前先清除舊的
-            Clear();
-
+            Debug.Log($"[{name}] Generating blueprint...");
             // If an imported package generator is present on the same GameObject, use it
             // and map its blueprint into the Core blueprint. Otherwise use the Core generator.
-            RoomBlueprint blueprint;
             var importedGen = GetComponent<ImportedCore.RoomGenerator>();
             if (importedGen != null)
             {
@@ -53,57 +54,120 @@ namespace MyGame.Adapters.Unity
                 IItemLibrary library = new ItemLibraryAdapter(database, themeDatabase);
                 RoomGenerator generator = new RoomGenerator(logger, library);
 
-                // ==========================================
-                // 2. 修正浮空問題
-                // ==========================================
-                // 舊寫法：new SimpleVector3(0, 0, 0) -> 導致房間一半在地下一半在地上
-                // 新寫法：把中心點往上提 "高度的一半" -> 這樣房間底部就在 0
                 var coreCenter = new SimpleVector3(0, roomSize.y / 2, 0);
-
                 var bounds = new SimpleBounds(coreCenter, new SimpleVector3(roomSize.x, roomSize.y, roomSize.z));
 
                 blueprint = generator.GenerateFromTheme(bounds, themeToBuild);
             }
-
-            var spawnedMap = BuildFromBlueprint(blueprint);
-            ApplyPhysicsSnapping(spawnedMap, blueprint);
+            Debug.Log($"[{name}] Blueprint generated with {blueprint.nodes.Count} nodes.");
         }
 
-        private Dictionary<string, Transform> BuildFromBlueprint(RoomBlueprint bp)
+        [ContextMenu("Build from Generated Blueprint")]
+        public void BuildFromGeneratedBlueprint()
         {
+            Debug.Log($"[{name}] Building from generated blueprint...");
+            if (blueprint == null)
+            {
+                Debug.LogError($"[{name}] Blueprint is not generated yet. Please call GenerateBlueprint() first.");
+                return;
+            }
+
+            Clear();
+            var spawnedMap = BuildFromBlueprint(blueprint);
+            ApplyPhysicsSnapping(spawnedMap, blueprint);
+
+            // Add a trigger collider to the room
+            var collider = gameObject.AddComponent<BoxCollider>();
+            collider.size = roomSize;
+            collider.isTrigger = true;
+
+            // Add the RoomTrigger component
+            gameObject.AddComponent<RoomTrigger>();
+            Debug.Log($"[{name}] Finished building.");
+        }
+
+        [ContextMenu("Build")]
+        public void Build()
+        {
+            GenerateBlueprint();
+            BuildFromGeneratedBlueprint();
+        }
+
+        public Dictionary<string, Transform> BuildFromBlueprint(RoomBlueprint bp)
+        {
+            Debug.Log($"[{name}] BuildFromBlueprint processing {bp.nodes.Count} nodes.");
             var spawned = new Dictionary<string, Transform>();
             var defMap = new Dictionary<string, ItemDefinition>();
+            cachedWallSize = null;
             foreach (var d in database) defMap[d.itemID] = d;
 
+            int wallCountBefore = bp.nodes.FindAll(n => n.itemID != null && n.itemID.Contains("Wall")).Count;
+            int doorCount = bp.nodes.FindAll(n => n.itemID != null && n.itemID.ToLower().Contains("door")).Count;
+
+            BlueprintPostProcessor.RemoveDoorWallOverlaps(bp, id =>
+            {
+                if (defMap.TryGetValue(id, out var def))
+                {
+                    if (def.prefab != null && TryGetBounds(def.prefab, out var b))
+                        return new SimpleVector3(b.size.x, b.size.y, b.size.z);
+
+                    var s = def.logicalSize;
+                    return new SimpleVector3(s.x, s.y, s.z);
+                }
+                return SimpleVector3.Zero;
+            });
+
+            int wallCountAfter = bp.nodes.FindAll(n => n.itemID != null && n.itemID.Contains("Wall")).Count;
+            int removed = wallCountBefore - wallCountAfter;
+            if (doorCount > 0)
+            {
+                Debug.Log($"[{name}] PostProcess RemoveDoorWallOverlaps: doors={doorCount}, wallsBefore={wallCountBefore}, wallsAfter={wallCountAfter}, removed={removed}.");
+            }
+
+            int spawnedCount = 0;
             foreach (var node in bp.nodes)
             {
-                if (!defMap.ContainsKey(node.itemID)) continue;
-                GameObject go = Instantiate(defMap[node.itemID].prefab);
+                if (!defMap.ContainsKey(node.itemID))
+                {
+                    Debug.LogWarning($"[{name}] ItemID '{node.itemID}' not found in database. Skipping.");
+                    continue;
+                }
+                GameObject prefab = defMap[node.itemID].prefab;
+                if (prefab == null)
+                {
+                    Debug.LogWarning($"[{name}] Prefab for ItemID '{node.itemID}' is null. Skipping.");
+                    continue;
+                }
+
+                GameObject go = Instantiate(prefab);
                 go.name = node.instanceID;
                 
-                // 注意：這裡的 node.position 已經包含了正確的 Y 軸資訊 (由 StructureGenerator 計算)
-                // 或者是 0 (由家具生成器計算)
                 Vector3 pos = new Vector3(node.position.x, node.position.y, node.position.z);
-
-                // 👇👇👇【補上這一段】👇👇👇
                 Quaternion rot = Quaternion.Euler(node.rotation.x, node.rotation.y, node.rotation.z);
-                // 👆👆👆
 
                 if (!string.IsNullOrEmpty(node.parentID) && spawned.ContainsKey(node.parentID))
                 {
                     go.transform.SetParent(spawned[node.parentID]);
                     go.transform.localPosition = pos;
-                    go.transform.localRotation = rot; // 👈 這裡也要設
+                    go.transform.localRotation = rot;
                 }
                 else
                 {
                     go.transform.SetParent(transform);
-                    // 加上 RoomBuilder 本身的位置，這樣你可以拖動 RoomBuilder，房間會跟著動
                     go.transform.position = pos + transform.position;
-                    go.transform.localRotation = rot; // 👈 這裡也要設
+                    go.transform.localRotation = rot;
                 }
+
+                // Auto-fix door pieces to match wall dimensions (height/thickness) even if the prefab was authored differently.
+                if (node.itemID.ToLower().Contains("door"))
+                {
+                    AutoSizeDoor(go.transform, defMap);
+                }
+
                 spawned[node.instanceID] = go.transform;
+                spawnedCount++;
             }
+            Debug.Log($"[{name}] Spawned {spawnedCount} objects.");
             return spawned;
         }
 
@@ -183,6 +247,86 @@ namespace MyGame.Adapters.Unity
             foreach (var c in allColliders) c.enabled = true;
         }
         
+        private void AutoSizeDoor(Transform door, Dictionary<string, ItemDefinition> defMap)
+        {
+            if (door == null) return;
+
+            Vector3 wallSize = GetWallSize(defMap);
+            // Prefer wall height but never exceed the configured room height.
+            float targetHeight = wallSize.y > 0 ? Mathf.Min(wallSize.y, roomSize.y) : roomSize.y;
+            float targetWidth  = wallSize.x > 0 ? wallSize.x : 0f;
+            float targetDepth  = wallSize.z > 0 ? wallSize.z : 0f;
+
+            if (!TryGetBounds(door.gameObject, out var doorBounds)) return;
+
+            const float minSize = 0.001f;
+            Vector3 current = doorBounds.size;
+            if (current.x < minSize || current.y < minSize || current.z < minSize) return;
+
+            // If width/depth were unknown, keep current to avoid collapsing to zero.
+            if (targetWidth <= 0f) targetWidth = current.x;
+            if (targetDepth <= 0f) targetDepth = current.z;
+
+            Vector3 scaleAdjust = new Vector3(
+                targetWidth / current.x,
+                targetHeight / current.y,
+                targetDepth / current.z
+            );
+
+            door.localScale = Vector3.Scale(door.localScale, scaleAdjust);
+
+            // After scaling, align the bottom of the door to the room's floor so it doesn't float or tower.
+            if (TryGetBounds(door.gameObject, out var scaledBounds))
+            {
+                float roomBottom = transform.position.y - (roomSize.y / 2f);
+                float deltaY = roomBottom - scaledBounds.min.y;
+                door.position += Vector3.up * deltaY;
+            }
+        }
+
+        private Vector3 GetWallSize(Dictionary<string, ItemDefinition> defMap)
+        {
+            if (cachedWallSize.HasValue) return cachedWallSize.Value;
+
+            foreach (var pair in defMap)
+            {
+                if (!pair.Key.Contains("Wall") || pair.Value == null || pair.Value.prefab == null) continue;
+
+                if (TryGetBounds(pair.Value.prefab, out var bounds))
+                {
+                    cachedWallSize = bounds.size;
+                    return cachedWallSize.Value;
+                }
+            }
+
+            cachedWallSize = Vector3.zero;
+            return cachedWallSize.Value;
+        }
+
+        private bool TryGetBounds(GameObject go, out Bounds bounds)
+        {
+            bounds = new Bounds(Vector3.zero, Vector3.zero);
+            if (go == null) return false;
+
+            bool hasBounds = false;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.name.Contains("Outline") || r is ParticleSystemRenderer) continue;
+                if (!hasBounds) { bounds = r.bounds; hasBounds = true; }
+                else bounds.Encapsulate(r.bounds);
+            }
+
+            if (hasBounds) return true;
+
+            foreach (var c in go.GetComponentsInChildren<Collider>(true))
+            {
+                if (!hasBounds) { bounds = c.bounds; hasBounds = true; }
+                else bounds.Encapsulate(c.bounds);
+            }
+
+            return hasBounds;
+        }
+
         void OnDrawGizmos()
         {
             // 畫出黃色框框代表房間範圍
