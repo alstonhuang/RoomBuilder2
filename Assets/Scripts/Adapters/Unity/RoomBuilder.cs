@@ -3,7 +3,7 @@ using System.Linq; // 👈 新增這行，為了用 ToList() 安全刪除
 using UnityEngine;
 using MyGame.Core;
 using ILogger = MyGame.Core.ILogger;
-using Imported = MyGame_1.Core;
+using ImportedCore = MyGame_1.Core;
 
 namespace MyGame.Adapters.Unity
 {
@@ -41,7 +41,7 @@ namespace MyGame.Adapters.Unity
             // If an imported package generator is present on the same GameObject, use it
             // and map its blueprint into the Core blueprint. Otherwise use the Core generator.
             RoomBlueprint blueprint;
-            var importedGen = GetComponent<Imported.RoomGenerator>();
+            var importedGen = GetComponent<ImportedCore.RoomGenerator>();
             if (importedGen != null)
             {
                 var importedBp = importedGen.GenerateStackDemo();
