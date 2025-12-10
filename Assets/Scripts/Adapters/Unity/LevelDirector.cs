@@ -13,6 +13,7 @@ namespace MyGame.Adapters.Unity
 
         [Header("Dependencies")]
         public GameObject roomBuilderPrefab; // Prefab of the RoomBuilder
+        public GameObject playerPrefab;      // Prefab of the player (optional, will instantiate if none exists)
 
         private List<RoomBuilder> m_RoomBuilders = new List<RoomBuilder>();
         private int m_RoomsCleared = 0;
@@ -56,14 +57,17 @@ namespace MyGame.Adapters.Unity
             }
             Debug.Log($"Successfully created {m_RoomBuilders.Count} RoomBuilder instances.");
 
+            // 2. Spawn player if not present
+            SpawnPlayerIfMissing();
+
             // 2. Add doors between rooms
-            Debug.Log("Step 2: Adding doors between rooms...");
+            Debug.Log("Step 3: Adding doors between rooms...");
             AddDoorsBetweenRooms(); // New method
             Debug.Log("Finished adding doors.");
 
 
             // 3. Build rooms from modified blueprints
-            Debug.Log("Step 3: Building rooms from blueprints...");
+            Debug.Log("Step 4: Building rooms from blueprints...");
             foreach (var builder in m_RoomBuilders)
             {
                 builder.BuildFromGeneratedBlueprint();
@@ -76,6 +80,28 @@ namespace MyGame.Adapters.Unity
             }
 
             Debug.Log($"--- Level Generation Complete ---");
+        }
+
+        private void SpawnPlayerIfMissing()
+        {
+            // If a player already exists, skip spawning.
+            if (FindAnyObjectByType<PlayerMovement>() != null) return;
+
+            if (playerPrefab == null)
+            {
+                Debug.LogWarning("No playerPrefab assigned; skipping player spawn. Add a prefab to LevelDirector to auto-spawn a player.");
+                return;
+            }
+
+            // Spawn near the first room; place slightly above the floor.
+            Vector3 spawnPos = transform.position + new Vector3(0, 1.5f, 0);
+            if (m_RoomBuilders.Count > 0)
+            {
+                spawnPos = m_RoomBuilders[0].transform.position + new Vector3(0, 1.5f, 0);
+            }
+
+            Instantiate(playerPrefab, spawnPos, Quaternion.identity);
+            Debug.Log($"Spawned player at {spawnPos}");
         }
 
         private void AddDoorsBetweenRooms()
