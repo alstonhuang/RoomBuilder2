@@ -18,6 +18,12 @@ namespace MyGame.Adapters.Unity
         private List<RoomBuilder> m_RoomBuilders = new List<RoomBuilder>();
         private int m_RoomsCleared = 0;
 
+        void Start()
+        {
+            // Ensure we begin with a single listener even before generation.
+            EnsureSingleAudioListener();
+        }
+
         [ContextMenu("Generate Level")]
         public void GenerateLevel()
         {
@@ -59,6 +65,7 @@ namespace MyGame.Adapters.Unity
 
             // 2. Spawn player if not present
             SpawnPlayerIfMissing();
+            EnsureSingleAudioListener();
 
             // 2. Add doors between rooms
             Debug.Log("Step 3: Adding doors between rooms...");
@@ -102,6 +109,35 @@ namespace MyGame.Adapters.Unity
 
             Instantiate(playerPrefab, spawnPos, Quaternion.identity);
             Debug.Log($"Spawned player at {spawnPos}");
+        }
+
+        private void EnsureSingleAudioListener()
+        {
+            AudioListener[] listeners;
+#if UNITY_2023_1_OR_NEWER
+            listeners = FindObjectsByType<AudioListener>(FindObjectsSortMode.None);
+#else
+            listeners = FindObjectsOfType<AudioListener>();
+#endif
+            if (listeners == null || listeners.Length == 0) return;
+
+            // Prefer the listener under the current player (if any), otherwise keep the first.
+            AudioListener preferred = null;
+#if UNITY_2023_1_OR_NEWER
+            var player = FindFirstObjectByType<PlayerMovement>();
+#else
+            var player = FindObjectOfType<PlayerMovement>();
+#endif
+            if (player != null)
+            {
+                preferred = player.GetComponentInChildren<AudioListener>(true);
+            }
+            if (preferred == null) preferred = listeners[0];
+
+            foreach (var listener in listeners)
+            {
+                listener.enabled = (listener == preferred);
+            }
         }
 
         private void AddDoorsBetweenRooms()

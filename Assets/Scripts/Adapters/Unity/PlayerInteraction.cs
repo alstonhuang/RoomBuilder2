@@ -46,8 +46,8 @@ public class PlayerInteraction : MonoBehaviour
                     currentInteractable.OnFocus();
                 }
 
-                // 準心變紅
-                crosshairImage.color = focusColor;
+                // 準心變紅（若有設定）
+                SetCrosshairColor(focusColor);
                 return; // 結束，不要執行下面的熄燈邏輯
             }
         }
@@ -60,8 +60,8 @@ public class PlayerInteraction : MonoBehaviour
             currentInteractable = null; // 清空紀錄
         }
 
-        // 準心變白
-        crosshairImage.color = defaultColor;
+        // 準心變白（若有設定）
+        SetCrosshairColor(defaultColor);
     }
 
     void TryInteract()
@@ -70,6 +70,14 @@ public class PlayerInteraction : MonoBehaviour
         if (currentInteractable != null)
         {
             currentInteractable.OnInteract();
+        }
+    }
+
+    private void SetCrosshairColor(Color color)
+    {
+        if (crosshairImage != null)
+        {
+            crosshairImage.color = color;
         }
     }
 

@@ -4,7 +4,7 @@
 
 這是一個基於 **Clean Architecture** (整潔架構) 的 Unity 程序化房間生成系統。專案核心採用 **純 C# 邏輯層 (Core)** 與 **引擎實作層 (Adapter)** 分離的設計，實現了從宏觀佈局到微觀物品散佈的自動化生成。
 
-目前版本：**v0.6.1 (Multi-room Walls & Doors)**
+目前版本：**v0.6.2 (Player Auto-Spawn & UI Fixes)**
 
 ## 🌟 專案特色
 
@@ -18,6 +18,7 @@
 *   **數據驅動 (Data-Driven)：** 所有物品屬性、尺寸、生成規則皆透過 Unity `ScriptableObject` 設定。
 *   **可選牆面生成：** 可針對每個房間的四個邊單獨關閉牆面，用於多房間共用牆。
 *   **門框自適應：** 生成的門會依照牆厚與房高自動縮放，避免懸空或厚度不符。
+*   **玩家自動生成：** LevelDirector 可自動生成玩家（附滑鼠視角、移動、互動與 UI 準心），並自動確保場景中只有一個 Audio Listener。
 
 ## 📂 專案結構
 
@@ -82,6 +83,12 @@ Assets/
 3. 設定 `roomsToClear`、`roomSize` 與 `themeToBuild`，於 `LevelDirector` 上右鍵 **Generate Level**。
 4. 系統會保留每個房間的東側牆並跳過西側牆，以避免共用牆缺失；門會隨機開在東側牆上並在同房間放入一把鑰匙。
 
+### 6. 玩家與準心 (Player & Crosshair)
+*   在 `LevelDirector` 上指定 `playerPrefab`，若場景內找不到玩家則會自動生成。
+*   建議在玩家 Prefab 內含：`CharacterController`、`PlayerMovement`、`MouseLook` (Camera 子物件)、`PlayerInteraction`。
+*   在玩家 Prefab 內的 Canvas (Screen Space – Overlay) 放一個 `Crosshair` Image，並將該 Image 指到 `PlayerInteraction.crosshairImage`；Play 時看著可互動物件準心會變色。
+*   Audio Listener：`LevelDirector` 會優先保留玩家上的 Listener，其餘自動停用以避免多 Listener 警告。
+
 ### 選項：使用匯入套件的生成器
 若要使用已封存的匯入套件版本（`MyGame_1.Core.RoomGenerator`）：
 1.  在同一 GameObject 上再掛一個 `RoomGenerator` Component （位於 `Assets/Archive/ImportedCoreBackup/RoomGenerator.cs`）。
@@ -115,7 +122,12 @@ Assets/
 
 ## 📝 版本歷程 (Changelog)
 
-### v0.6.1 - Multi-room Walls & Doors (Latest)
+### v0.6.2 - Player Auto-Spawn & UI Fixes (Latest)
+*   **玩家自動生成：** `LevelDirector` 可在缺少玩家時自動生成，並偏好保留玩家上的 Audio Listener，避免多 Listener 警告。
+*   **跨版本 API 兼容：** 使用新版 `FindObjectsByType` / `FindFirstObjectByType`，消除 Unity 2023 的過時 API 警告。
+*   **互動準心防呆：** `PlayerInteraction` 在未設定 Crosshair Image 時不再拋出 NullReference。
+
+### v0.6.1 - Multi-room Walls & Doors
 *   **單邊牆控制：** `RoomBuilder`/`RoomGenerator`/`StructureGenerator` 可分別跳過南北東西牆，`LevelDirector` 預設保留東牆並跳過西牆，避免共用牆被吃掉。
 *   **多房門/鑰匙佈局：** `LevelDirector` 會在東側牆隨機 Z 位置開門 (`DoorSystem`)，並於同一房間掉落一把 `Key`。
 *   **門框對齊：** 門自動依牆厚及房高縮放，並貼齊地板，減少美術 Prefab 尺寸差異造成的縫隙。
