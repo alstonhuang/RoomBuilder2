@@ -94,7 +94,7 @@ namespace MyGame.Adapters.Unity
             {
                 Debug.LogError($"[{name}] Blueprint is not generated yet. Please call GenerateBlueprint() first.");
                 return;
-            }
+            } 
 
             Clear();
             var spawnedMap = BuildFromBlueprint(blueprint);
@@ -182,10 +182,10 @@ namespace MyGame.Adapters.Unity
                     go.transform.localRotation = rot;
                 }
 
-                // Auto-fix door pieces to match wall dimensions (height/thickness) even if the prefab was authored differently.
+                // Align door to floor, but do not rescale (keep prefab-defined size).
                 if (node.itemID.ToLower().Contains("door"))
                 {
-                    AutoSizeDoor(go.transform, defMap, node.rotation);
+                    AlignDoorToFloor(go.transform);
                 }
 
                 spawned[node.instanceID] = go.transform;
@@ -271,58 +271,16 @@ namespace MyGame.Adapters.Unity
             foreach (var c in allColliders) c.enabled = true;
         }
         
-        private void AutoSizeDoor(Transform door, Dictionary<string, ItemDefinition> defMap, SimpleVector3 nodeRotation)
+        private void AlignDoorToFloor(Transform door)
         {
             if (door == null) return;
-
-            Vector3 wallSize = GetWallSize(defMap); // This is size of a single wall segment
-            
-            // Prefer wall height but never exceed the configured room height.
-            float targetHeight = wallSize.y > 0 ? Mathf.Min(wallSize.y, roomSize.y) : roomSize.y;
-            float targetWidth;
-            float targetDepth;
-
-            // Assuming a standard door width, e.g., 1 unit for now.
-            // Its thickness should match the wall thickness.
-            // If the door is rotated 90/270 degrees (East/West wall), its local X (width) should be the door width,
-            // and its local Z (depth) should be the wall thickness (wallSize.x).
-            // If the door is rotated 0/180 degrees (North/South wall), its local X (width) should be the door width,
-            // and its local Z (depth) should be the wall thickness (wallSize.z).
-
-            float standardDoorWidth = 1.0f; // A reasonable default for a door opening
-
-            float yRotation = nodeRotation.y;
-            if (Mathf.Approximately(yRotation, 90f) || Mathf.Approximately(yRotation, 270f)) // East/West wall
-            {
-                targetWidth = standardDoorWidth;
-                targetDepth = wallSize.x; // Use wall thickness for door depth
-            }
-            else // North/South wall (or default 0/180)
-            {
-                targetWidth = standardDoorWidth;
-                targetDepth = wallSize.z; // Use wall thickness for door depth
-            }
-
-            if (!TryGetBounds(door.gameObject, out var doorBounds)) return;
-
-            const float minSize = 0.001f;
-            Vector3 current = doorBounds.size;
-            if (current.x < minSize || current.y < minSize || current.z < minSize) return;
-
-            Vector3 scaleAdjust = new Vector3(
-                targetWidth / current.x,
-                targetHeight / current.y,
-                targetDepth / current.z
-            );
-
-            door.localScale = Vector3.Scale(door.localScale, scaleAdjust);
-
-            // After scaling, align the bottom of the door to the room's floor so it doesn't float or tower.
-            if (TryGetBounds(door.gameObject, out var scaledBounds))
+            if (TryGetBounds(door.gameObject, out var bounds))
             {
                 float roomBottom = transform.position.y - (roomSize.y / 2f);
-                float deltaY = roomBottom - scaledBounds.min.y;
-                door.position += Vector3.up * deltaY;
+                float targetY = roomBottom + bounds.extents.y;
+                Vector3 p = door.position;
+                p.y = targetY;
+                door.position = p;
             }
         }
 

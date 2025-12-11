@@ -3,20 +3,22 @@ using UnityEngine.UI;
 
 public class PlayerInteraction : MonoBehaviour
 {
-    public float interactionDistance = 3f;
+    public float interactionDistance = 5f;
     public int keyCount = 0;
     public Image crosshairImage;
     public Color defaultColor = Color.white;
     public Color focusColor = Color.red;
+    public Transform eye; // 視角來源（建議指定主攝影機）
+    public bool debugRay = true;
+    public bool debugInteract = true;
 
-    // 紀錄我們「上一幀」看著的東西
     private Interactable currentInteractable;
 
     void Update()
     {
         CheckHover();
 
-        if (Input.GetKeyDown(KeyCode.E))
+        if (IsInteractPressed())
         {
             TryInteract();
         }
@@ -24,53 +26,66 @@ public class PlayerInteraction : MonoBehaviour
 
     void CheckHover()
     {
-        RaycastHit hit;
-        
-        // 1. 發射雷射
-        if (Physics.Raycast(transform.position, transform.forward, out hit, interactionDistance))
+        Transform origin = eye != null ? eye : (Camera.main != null ? Camera.main.transform : transform);
+        if (origin == null) return;
+
+        var hits = Physics.RaycastAll(origin.position, origin.forward, interactionDistance, ~0, QueryTriggerInteraction.Ignore);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (var h in hits)
         {
-            Interactable newInteractable = hit.transform.GetComponentInParent<Interactable>();
-
-            // 2. 判斷邏輯
-            if (newInteractable != null)
+            var newInteractable = h.transform.GetComponentInParent<Interactable>();
+            if (newInteractable == null)
             {
-                // A. 如果現在看著這東西，跟上一幀不一樣 (代表視線剛移過來)
-                if (newInteractable != currentInteractable)
-                {
-                    // 如果原本有看著別的東西，先叫它熄燈
-                    if (currentInteractable != null) 
-                        currentInteractable.OnLoseFocus();
-
-                    // 紀錄新的東西，並叫它亮燈
-                    currentInteractable = newInteractable;
-                    currentInteractable.OnFocus();
-                }
-
-                // 準心變紅（若有設定）
-                SetCrosshairColor(focusColor);
-                return; // 結束，不要執行下面的熄燈邏輯
+                if (debugRay) Debug.Log($"[PlayerInteraction] Ray hit {h.collider.name} (no Interactable), continuing...");
+                continue;
             }
+
+            if (newInteractable != currentInteractable)
+            {
+                if (currentInteractable != null)
+                    currentInteractable.OnLoseFocus();
+
+                currentInteractable = newInteractable;
+                currentInteractable.OnFocus();
+            }
+
+            SetCrosshairColor(focusColor);
+            if (debugRay) Debug.Log($"[PlayerInteraction] Hit Interactable {newInteractable.name} at {h.point}");
+            return;
         }
 
-        // 3. 如果什麼都沒打到，或者打到的不是 Interactable
+        //if (debugRay) Debug.Log("[PlayerInteraction] Ray hit nothing with Interactable");
+
         if (currentInteractable != null)
         {
-            // 叫舊的東西熄燈
             currentInteractable.OnLoseFocus();
-            currentInteractable = null; // 清空紀錄
+            currentInteractable = null;
         }
 
-        // 準心變白（若有設定）
         SetCrosshairColor(defaultColor);
     }
 
     void TryInteract()
     {
-        // 這裡直接使用我們已經記住的 currentInteractable，不用再射一次雷射了，比較省效能
         if (currentInteractable != null)
         {
+            if (debugInteract) Debug.Log($"[PlayerInteraction] Interact with {currentInteractable.name}");
             currentInteractable.OnInteract();
         }
+        else if (debugInteract)
+        {
+            Debug.Log("[PlayerInteraction] Interact pressed but no target");
+        }
+    }
+
+    bool IsInteractPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var kb = UnityEngine.InputSystem.Keyboard.current;
+        if (kb != null && kb.eKey.wasPressedThisFrame) return true;
+#endif
+        return Input.GetKeyDown(KeyCode.E);
     }
 
     private void SetCrosshairColor(Color color)
@@ -84,14 +99,14 @@ public class PlayerInteraction : MonoBehaviour
     public void AddKey()
     {
         keyCount++;
-        Debug.Log("撿到鑰匙了！目前鑰匙數量: " + keyCount);
+        Debug.Log("撿到鑰匙，持有數: " + keyCount);
     }
 
     public bool HasKey()
     {
         if (keyCount > 0)
         {
-            keyCount--; 
+            keyCount--;
             return true;
         }
         return false;

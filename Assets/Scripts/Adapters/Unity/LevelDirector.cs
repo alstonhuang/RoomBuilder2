@@ -44,13 +44,12 @@ namespace MyGame.Adapters.Unity
                     roomBuilder.roomSize = this.roomSize;
                     roomBuilder.themeToBuild = this.themeToBuild;
 
-                    // Determine wall skipping flags
-                    // Keep the east wall so a door can be carved out; only skip the west wall to avoid double thickness.
-                    bool skipEast = false;
-                    bool skipWest = (i > 0); // Let the room on the left provide the shared wall
-
-                    // Set wall generation flags before generating the blueprint (North & South always generated for now)
-                    roomBuilder.SetWallGenerationFlags(false, false, skipEast, skipWest);
+                    // 為避免相鄰牆重疊：左邊房保留西牆，右邊房略過西牆；東牆保留以便開門
+                    bool skipNorth = false;
+                    bool skipSouth = false;
+                    bool skipEast = false;          // 保留東牆開門
+                    bool skipWest = (i > 0);        // 除了最左邊，其餘房間略過西牆
+                    roomBuilder.SetWallGenerationFlags(skipNorth, skipSouth, skipEast, skipWest);
                     
                     roomBuilder.GenerateBlueprint();
                     m_RoomBuilders.Add(roomBuilder);
@@ -142,9 +141,29 @@ namespace MyGame.Adapters.Unity
 
         private void AddDoorsBetweenRooms()
         {
-            if (m_RoomBuilders.Count < 2)
+            if (m_RoomBuilders.Count == 0)
             {
-                Debug.Log("Not enough rooms to connect with doors.");
+                Debug.Log("No rooms to connect.");
+                return;
+            }
+
+            // Special case: only one room -> place a single door on its east wall.
+            if (m_RoomBuilders.Count == 1)
+            {
+                var room = m_RoomBuilders[0];
+                float doorPosX = roomSize.x / 2;
+                float doorPosZ = 0f;
+
+                room.blueprint.nodes.Add(new PropNode
+                {
+                    instanceID = $"Door_{room.name}_Exit",
+                    itemID = "DoorSystem",
+                    position = new SimpleVector3(doorPosX, 0, doorPosZ),
+                    rotation = new SimpleVector3(0, 90, 0)
+                });
+
+                bool removedWall = RemoveWallSegment(room.blueprint, doorPosX, doorPosZ);
+                Debug.Log($"Single-room door added to {room.name}, wall removed={removedWall}");
                 return;
             }
 
@@ -154,30 +173,22 @@ namespace MyGame.Adapters.Unity
                 RoomBuilder roomA = m_RoomBuilders[i];
                 RoomBuilder roomB = m_RoomBuilders[i + 1]; // Room B is to the East of Room A
 
-                // Add the DoorSystem to Room A's blueprint at its East side
+                // Place the door centered on the shared wall (+X of A)
                 float doorPosX = roomSize.x / 2; // Position on the +X side of Room A
-
-                // Calculate available range for door placement along the Z-axis of the wall
-                // We need to ensure the door is not placed too close to the corners.
-                // Let's assume a buffer of 1 unit from each corner.
-                float minZ = -roomSize.z / 2 + 1.0f; // 1 unit from corner
-                float maxZ = roomSize.z / 2 - 1.0f;  // 1 unit from corner
-                
-                // If room is too small, just center it
-                if (minZ > maxZ) 
-                {
-                    minZ = 0;
-                    maxZ = 0;
-                }
-                float randomZ = UnityEngine.Random.Range(minZ, maxZ);
+                float doorPosZ = 0f; // centered to avoid hitting corners
 
                 roomA.blueprint.nodes.Add(new PropNode
                 {
                     instanceID = $"Door_{roomA.name}_{roomB.name}",
                     itemID = "DoorSystem",
-                    position = new SimpleVector3(doorPosX, 0, randomZ), // Random Z position
+                    position = new SimpleVector3(doorPosX, 0, doorPosZ), // centered Z
                     rotation = new SimpleVector3(0, 90, 0) // Rotate to face along the X-axis
                 });
+                // Remove one wall segment on both sides where the door sits
+                bool removedA = RemoveWallSegment(roomA.blueprint, doorPosX, doorPosZ);
+                bool removedB = RemoveWallSegment(roomB.blueprint, -doorPosX, doorPosZ);
+                Debug.Log($"Door carve result A={removedA}, B={removedB} at z={doorPosZ}");
+
                 // Add a Key to the room where the door is placed (Room A)
                 roomA.blueprint.nodes.Add(new PropNode
                 {
@@ -188,6 +199,34 @@ namespace MyGame.Adapters.Unity
                 });
                 Debug.Log($"Added Key node to {roomA.name}.");
             }
+        }
+
+        private bool RemoveWallSegment(RoomBlueprint bp, float targetX, float targetZ, float epsilonX = 0.6f, float epsilonZ = 0.6f)
+        {
+            int bestIndex = -1;
+            float bestDist = float.MaxValue;
+
+            for (int i = 0; i < bp.nodes.Count; i++)
+            {
+                var n = bp.nodes[i];
+                if (n.itemID == null || !n.itemID.Contains("Wall")) continue;
+                if (Mathf.Abs(n.position.x - targetX) > epsilonX) continue;
+                if (Mathf.Abs(n.position.z - targetZ) > epsilonZ) continue;
+
+                float dist = Mathf.Abs(n.position.x - targetX) + Mathf.Abs(n.position.z - targetZ);
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    bestIndex = i;
+                }
+            }
+
+            if (bestIndex >= 0)
+            {
+                bp.nodes.RemoveAt(bestIndex);
+                return true;
+            }
+            return false;
         }
 
 

@@ -330,6 +330,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   moveSpeed: 5
   gravity: -9.81
+  debugInput: 0
 --- !u!114 &2862466532156949815
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -347,6 +348,8 @@ MonoBehaviour:
   crosshairImage: {fileID: 755196043036364905, guid: aed70dd6b40f6482a886a4a23c328b22, type: 3}
   defaultColor: {r: 1, g: 1, b: 1, a: 1}
   focusColor: {r: 1, g: 0, b: 0, a: 1}
+  eye: {fileID: 0}
+  debugRay: 1
 --- !u!81 &2843080714246411343
 AudioListener:
   m_ObjectHideFlags: 0

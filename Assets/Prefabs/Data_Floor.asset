@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Data_Floor
   m_EditorClassIdentifier: 
   itemID: FloorTile
-  prefab: {fileID: 8480212706665663150, guid: 4b18d56eb45b24693aa26d21734a108e, type: 3}
+  prefab: {fileID: 4016056218330990216, guid: 79bb1a4800077834f943d3e7fa5cffc4, type: 3}
   categoryTag: 
   logicalSize: {x: 1, y: 1, z: 1}
   minBounds: {x: 1, y: 0.1, z: 1}

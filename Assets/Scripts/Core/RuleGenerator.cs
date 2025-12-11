@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-
+ 
 namespace MyGame.Core
 {
     // 這是專門負責 "動態產生規則" 的大腦
