@@ -28,8 +28,8 @@ Transform:
   m_GameObject: {fileID: 1582747792989800451}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.8, y: 0, z: 0}
-  m_LocalScale: {x: 0.1, y: 2, z: 0.1}
+  m_LocalPosition: {x: 0.55, y: 0, z: 0}
+  m_LocalScale: {x: 0.1, y: 2, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2770238957219007198}
@@ -137,7 +137,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 1, z: 0}
-  m_LocalScale: {x: 1.7, y: 0.1, z: 0.1}
+  m_LocalScale: {x: 1.2, y: 0.2, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2770238957219007198}
@@ -244,8 +244,8 @@ Transform:
   m_GameObject: {fileID: 3780756406882205931}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.8, y: 0, z: 0}
-  m_LocalScale: {x: 0.1, y: 2, z: 0.1}
+  m_LocalPosition: {x: -0.55, y: 0, z: 0}
+  m_LocalScale: {x: 0.1, y: 2, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2770238957219007198}
@@ -351,7 +351,7 @@ Transform:
   m_GameObject: {fileID: 5816845892575805869}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.75, y: 1, z: 5}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -410,6 +410,7 @@ MonoBehaviour:
           m_BoolArgument: 0
         m_CallState: 2
   outlineScript: {fileID: 1388260375507627503}
+  debugInteract: 0
 --- !u!1 &7080643287603309286
 GameObject:
   m_ObjectHideFlags: 0
@@ -437,8 +438,8 @@ Transform:
   m_GameObject: {fileID: 7080643287603309286}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.75, y: 0, z: 0.01}
-  m_LocalScale: {x: 1, y: 1, z: 0.9}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 4435353230732829343}
@@ -457,6 +458,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   isLocked: 1
+  hinge: {fileID: 1059856508551665965}
+  debugLog: 0
 --- !u!114 &2721561395293051599
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -464,7 +467,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7080643287603309286}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 27c346bbcf5afb34f82e7d2c44bde22d, type: 3}
   m_Name: 
@@ -472,9 +475,9 @@ MonoBehaviour:
   onInteract:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
+      - m_Target: {fileID: 7556243645154390568}
         m_TargetAssemblyTypeName: DoorController, Assembly-CSharp
-        m_MethodName: 
+        m_MethodName: TryOpen
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -484,7 +487,8 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-  outlineScript: {fileID: 0}
+  outlineScript: {fileID: 1388260375507627503}
+  debugInteract: 1
 --- !u!1 &7627695929015304617
 GameObject:
   m_ObjectHideFlags: 0
@@ -496,6 +500,8 @@ GameObject:
   - component: {fileID: 4435353230732829343}
   - component: {fileID: 4248167357493866634}
   - component: {fileID: 6943067802345557807}
+  - component: {fileID: 556677889900112233}
+  - component: {fileID: 600000000000000001}
   - component: {fileID: 1388260375507627503}
   m_Layer: 0
   m_Name: Door
@@ -513,8 +519,8 @@ Transform:
   m_GameObject: {fileID: 7627695929015304617}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.75, y: -0.05, z: 0}
-  m_LocalScale: {x: 1.45, y: 1.95, z: 0.1}
+  m_LocalPosition: {x: 0.55, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 2, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1059856508551665965}
@@ -572,6 +578,56 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!65 &556677889900112233
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7627695929015304617}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 2, z: 0.2}
+  m_Center: {x: 0, y: 1, z: 0}
+--- !u!114 &600000000000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7627695929015304617}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27c346bbcf5afb34f82e7d2c44bde22d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  onInteract:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 7556243645154390568}
+        m_TargetAssemblyTypeName: DoorController, Assembly-CSharp
+        m_MethodName: TryOpen
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+  outlineScript: {fileID: 1388260375507627503}
+  debugInteract: 0
 --- !u!114 &1388260375507627503
 MonoBehaviour:
   m_ObjectHideFlags: 0

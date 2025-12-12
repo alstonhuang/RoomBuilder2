@@ -70,6 +70,7 @@ public class DoorController : MonoBehaviour
     // 由 Interactable 呼叫
     public void TryOpen()
     {
+        Debug.Log($"[DoorController] TryOpen on {name}, isLocked={isLocked}, isOpen={isOpen}");
         if (isLocked)
         {
             var player = FindAnyObjectByType<PlayerInteraction>();
@@ -77,11 +78,11 @@ public class DoorController : MonoBehaviour
             {
                 UnlockDoor();
                 isOpen = true; 
-                Debug.Log("使用了鑰匙，門已解鎖並打開");
+                Debug.Log("[DoorController] 使用了鑰匙，門已解鎖並打開");
             }
             else
             {
-                Debug.Log("需要鑰匙才能打開這扇門");
+                Debug.Log("[DoorController] 需要鑰匙才能打開這扇門");
             }
         }
         else
@@ -93,7 +94,7 @@ public class DoorController : MonoBehaviour
     public void UnlockDoor()
     {
         isLocked = false;
-        Debug.Log("門已解鎖");
+        Debug.Log("[DoorController] 門已解鎖");
     }
 
     private void ResetClosed()

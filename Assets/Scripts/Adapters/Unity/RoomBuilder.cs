@@ -53,12 +53,13 @@ namespace MyGame.Adapters.Unity
             foreach (var child in children)
             {
                 // 在編輯模式下必須用 DestroyImmediate
-                DestroyImmediate(child.gameObject);
+                if (Application.isPlaying) Destroy(child.gameObject);
+                else DestroyImmediate(child.gameObject);
             }
-            Debug.Log("[RoomBuilder] 已清除所有生成的物件。");
+            Debug.Log("[RoomBuilder] 已清除所有生成的物件。"); 
         }
 
-        [ContextMenu("Generate Blueprint")]
+        [ContextMenu("Generate Blueprint")] 
         public void GenerateBlueprint()
         {
             Debug.Log($"[{name}] Generating blueprint...");
@@ -132,11 +133,13 @@ namespace MyGame.Adapters.Unity
             {
                 if (defMap.TryGetValue(id, out var def))
                 {
+                    // Prefer logical size (so DoorSystem can describe its intended opening), fall back to prefab bounds.
+                    var s = def.logicalSize;
+                    if (s.x > 0 && s.y > 0 && s.z > 0)
+                        return new SimpleVector3(s.x, s.y, s.z);
+
                     if (def.prefab != null && TryGetBounds(def.prefab, out var b))
                         return new SimpleVector3(b.size.x, b.size.y, b.size.z);
-
-                    var s = def.logicalSize;
-                    return new SimpleVector3(s.x, s.y, s.z);
                 }
                 return SimpleVector3.Zero;
             });
@@ -168,6 +171,15 @@ namespace MyGame.Adapters.Unity
                 
                 Vector3 pos = new Vector3(node.position.x, node.position.y, node.position.z);
                 Quaternion rot = Quaternion.Euler(node.rotation.x, node.rotation.y, node.rotation.z);
+
+                // DoorSystem runtime adjust to avoid prefab scale layering issues
+                if (node.itemID.Equals("DoorSystem"))
+                {
+                    float logicalWidth = 1f;
+                    if (defMap.TryGetValue(node.itemID, out var def) && def.logicalSize.x > 0)
+                        logicalWidth = def.logicalSize.x;
+                    ConfigureDoorSystem(go.transform, GetWallSize(defMap), roomSize, logicalWidth);
+                }
 
                 if (!string.IsNullOrEmpty(node.parentID) && spawned.ContainsKey(node.parentID))
                 {
@@ -275,12 +287,11 @@ namespace MyGame.Adapters.Unity
         {
             if (door == null) return;
             
-            // Scale door to match wall height/depth so it fills the opening vertically.
-            if (wallSize != Vector3.zero)
+            // Keep door's prefab scale; only ensure depth does not exceed wall thickness.
+            if (wallSize != Vector3.zero && wallSize.z > 0)
             {
                 Vector3 s = door.localScale;
-                s.y = wallSize.y;
-                s.z = wallSize.z > 0 ? wallSize.z : s.z;
+                if (s.z > wallSize.z) s.z = wallSize.z;
                 door.localScale = s;
             }
 
@@ -296,6 +307,77 @@ namespace MyGame.Adapters.Unity
                 p.y = hit.point.y - bottomOffset;
                 door.position = p;
             }
+        }
+
+        private void ConfigureDoorSystem(Transform doorRoot, Vector3 wallSize, Vector3 roomSizeVec, float logicalWidthMultiplier = 1f)
+        {
+            if (doorRoot == null) return;
+
+            Debug.Log($"[RoomBuilder] ConfigureDoorSystem wallSize={wallSize}");
+
+            float depth = wallSize.z > 0 ? wallSize.z : 0.2f;
+            float height = wallSize.y > 0 ? wallSize.y : roomSizeVec.y;
+            if (logicalWidthMultiplier < 1f) logicalWidthMultiplier = 1f;
+            float baseWidth = (wallSize.x > 0 ? wallSize.x : 4.0f) * logicalWidthMultiplier; // prefer actual wall width, scaled by logical tiles
+            float frameThickness = Mathf.Clamp(baseWidth * 0.05f, 0.08f, 0.12f);
+            float totalWidth = baseWidth; // the opening to fill
+            float doorWidth = Mathf.Max(totalWidth - frameThickness * 2f, totalWidth * 0.7f);
+            Debug.Log($"[RoomBuilder] ConfigureDoorSystem baseWidth={baseWidth:F2}, frameThickness={frameThickness:F2}, doorWidth={doorWidth:F2}, depth={depth:F2}, height={height:F2}");
+
+            doorRoot.localScale = Vector3.one;
+            doorRoot.localRotation = Quaternion.identity;
+
+            Transform left = doorRoot.Find("Frame_Left");
+            Transform right = doorRoot.Find("Frame_Right");
+            Transform top = doorRoot.Find("Frame_Top");
+            Transform hinge = doorRoot.Find("DoorHinge");
+            Transform door = hinge != null ? hinge.Find("Door") : null;
+
+            // Position frames
+            float half = totalWidth * 0.5f;
+            if (left != null)
+            {
+                left.localPosition = new Vector3(-half + frameThickness * 0.5f, 0, 0);
+                left.localScale = new Vector3(frameThickness, height, depth);
+            }
+            if (right != null)
+            {
+                right.localPosition = new Vector3(half - frameThickness * 0.5f, 0, 0);
+                right.localScale = new Vector3(frameThickness, height, depth);
+            }
+            if (top != null)
+            {
+                top.localPosition = new Vector3(0, height * 0.5f + frameThickness * 0.5f, 0);
+                top.localScale = new Vector3(totalWidth, frameThickness, depth);
+            }
+
+            if (hinge != null)
+            {
+                // Keep hinge at the prefab pivot to avoid drifting; frames define the visible edges.
+                hinge.localPosition = Vector3.zero;
+                hinge.localScale = Vector3.one;
+            }
+            if (door != null)
+            {
+                // Center the leaf between frames; hinge stays at pivot (0)
+                door.localPosition = new Vector3(0f, 0f, 0f);
+                door.localScale = new Vector3(doorWidth, height, depth);
+
+                var col = door.GetComponent<BoxCollider>();
+                if (col != null)
+                {
+                    col.size = new Vector3(doorWidth, height, depth);
+                    col.center = new Vector3(0, height / 2f, 0);
+                    col.isTrigger = false;
+                }
+            }
+
+            string lp = left != null ? left.localPosition.ToString() : "null";
+            string rp = right != null ? right.localPosition.ToString() : "null";
+            string tp = top != null ? top.localPosition.ToString() : "null";
+            string hp = hinge != null ? hinge.localPosition.ToString() : "null";
+            string dp = door != null ? door.localPosition.ToString() : "null";
+            Debug.Log($"[RoomBuilder] DoorSystem parts: leftPos={lp}, rightPos={rp}, topPos={tp}, hingePos={hp}, doorPos={dp}");
         }
 
         private Vector3 GetWallSize(Dictionary<string, ItemDefinition> defMap)

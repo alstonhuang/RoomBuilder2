@@ -85,17 +85,28 @@ public class Outline : MonoBehaviour {
     // Cache renderers
     renderers = GetComponentsInChildren<Renderer>();
 
-        // Instantiate outline materials (gracefully fail if resources are missing)
-        var maskSrc = Resources.Load<Material>(@"Materials/OutlineMask");
-        var fillSrc = Resources.Load<Material>(@"Materials/OutlineFill");
-        if (maskSrc == null || fillSrc == null)
-        {
-            Debug.LogWarning("[QuickOutline] Outline materials not found under Resources/Materials. Disabling outline.");
-            enabled = false;
-            return;
-        }
-        outlineMaskMaterial = Instantiate(maskSrc);
-        outlineFillMaterial = Instantiate(fillSrc);
+    // Instantiate outline materials (gracefully fall back to runtime-created materials)
+    var maskSrc = Resources.Load<Material>(@"Materials/OutlineMask");
+    var fillSrc = Resources.Load<Material>(@"Materials/OutlineFill");
+
+    if (maskSrc == null)
+    {
+        var maskShader = Shader.Find("Hidden/QuickOutline/OutlineMask");
+        if (maskShader != null) maskSrc = new Material(maskShader) { name = "OutlineMask (Auto)" };
+    }
+    if (fillSrc == null)
+    {
+        var fillShader = Shader.Find("Hidden/QuickOutline/OutlineFill");
+        if (fillShader != null) fillSrc = new Material(fillShader) { name = "OutlineFill (Auto)" };
+    }
+    if (maskSrc == null || fillSrc == null)
+    {
+        Debug.LogWarning("[QuickOutline] Outline materials/shaders missing. Disabling outline.");
+        enabled = false;
+        return;
+    }
+    outlineMaskMaterial = Instantiate(maskSrc);
+    outlineFillMaterial = Instantiate(fillSrc);
 
     outlineMaskMaterial.name = "OutlineMask (Instance)";
     outlineFillMaterial.name = "OutlineFill (Instance)";
@@ -108,6 +119,10 @@ public class Outline : MonoBehaviour {
   }
 
   void OnEnable() {
+    if (outlineMaskMaterial == null || outlineFillMaterial == null || renderers == null || renderers.Length == 0) {
+      enabled = false;
+      return;
+    }
     foreach (var renderer in renderers) {
 
       // Append outline shaders
@@ -138,6 +153,10 @@ public class Outline : MonoBehaviour {
   }
 
   void Update() {
+    if (outlineMaskMaterial == null || outlineFillMaterial == null || renderers == null || renderers.Length == 0) {
+      enabled = false;
+      return;
+    }
     if (needsUpdate) {
       needsUpdate = false;
 
@@ -146,6 +165,9 @@ public class Outline : MonoBehaviour {
   }
 
   void OnDisable() {
+    if (outlineMaskMaterial == null || outlineFillMaterial == null || renderers == null || renderers.Length == 0) {
+      return;
+    }
     foreach (var renderer in renderers) {
 
       // Remove outline shaders
@@ -278,6 +300,11 @@ public class Outline : MonoBehaviour {
   }
 
   void UpdateMaterialProperties() {
+
+    if (outlineMaskMaterial == null || outlineFillMaterial == null || renderers == null || renderers.Length == 0) {
+      enabled = false;
+      return;
+    }
 
     // Apply properties according to mode
     outlineFillMaterial.SetColor("_OutlineColor", outlineColor);
