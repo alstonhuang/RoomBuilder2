@@ -4,7 +4,7 @@
 
 這是一個基於 **Clean Architecture** (整潔架構) 的 Unity 程序化房間生成系統。專案核心採用 **純 C# 邏輯層 (Core)** 與 **引擎實作層 (Adapter)** 分離的設計，實現了從宏觀佈局到微觀物品散佈的自動化生成。
 
-目前版本：**v0.6.2 (Player Auto-Spawn & UI Fixes)**
+目前版本：**v0.6.3 (Door Placement & Carve Fixes)**
 
 ## 🌟 專案特色
 
@@ -122,7 +122,12 @@ Assets/
 
 ## 📝 版本歷程 (Changelog)
 
-### v0.6.2 - Player Auto-Spawn & UI Fixes (Latest)
+### v0.6.3 - Door Placement & Carve Fixes (Latest)
+*   **門貼地對齊：** 門生成後改用 raycast 探地，依 prefab bounds 底部對齊地板，避免門浮空。
+*   **門洞挖牆加大：** 依門 prefab 實際寬/深自動計算開口，移除門口 footprint 內的所有牆段，避免只挖掉一塊牆。
+*   **日誌：** 連接房間時會輸出實際移除的牆段數，方便檢查。
+
+### v0.6.2 - Player Auto-Spawn & UI Fixes
 *   **玩家自動生成：** `LevelDirector` 可在缺少玩家時自動生成，並偏好保留玩家上的 Audio Listener，避免多 Listener 警告。
 *   **跨版本 API 兼容：** 使用新版 `FindObjectsByType` / `FindFirstObjectByType`，消除 Unity 2023 的過時 API 警告。
 *   **互動準心防呆：** `PlayerInteraction` 在未設定 Crosshair Image 時不再拋出 NullReference。

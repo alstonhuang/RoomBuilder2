@@ -147,6 +147,11 @@ namespace MyGame.Adapters.Unity
                 return;
             }
 
+            // Determine door footprint so we can carve enough wall tiles.
+            Vector3 doorSize = GetDoorFootprintSize();
+            float halfX = Mathf.Max(0.5f, (doorSize.x * 0.5f) + 0.05f);
+            float halfZ = Mathf.Max(0.5f, (doorSize.z * 0.5f) + 0.05f);
+
             // Special case: only one room -> place a single door on its east wall.
             if (m_RoomBuilders.Count == 1)
             {
@@ -162,7 +167,7 @@ namespace MyGame.Adapters.Unity
                     rotation = new SimpleVector3(0, 90, 0)
                 });
 
-                bool removedWall = RemoveWallSegment(room.blueprint, doorPosX, doorPosZ);
+                int removedWall = RemoveWallSegments(room.blueprint, doorPosX, doorPosZ, halfX, halfZ);
                 Debug.Log($"Single-room door added to {room.name}, wall removed={removedWall}");
                 return;
             }
@@ -185,8 +190,8 @@ namespace MyGame.Adapters.Unity
                     rotation = new SimpleVector3(0, 90, 0) // Rotate to face along the X-axis
                 });
                 // Remove one wall segment on both sides where the door sits
-                bool removedA = RemoveWallSegment(roomA.blueprint, doorPosX, doorPosZ);
-                bool removedB = RemoveWallSegment(roomB.blueprint, -doorPosX, doorPosZ);
+                int removedA = RemoveWallSegments(roomA.blueprint, doorPosX, doorPosZ, halfX, halfZ);
+                int removedB = RemoveWallSegments(roomB.blueprint, -doorPosX, doorPosZ, halfX, halfZ);
                 Debug.Log($"Door carve result A={removedA}, B={removedB} at z={doorPosZ}");
 
                 // Add a Key to the room where the door is placed (Room A)
@@ -201,32 +206,57 @@ namespace MyGame.Adapters.Unity
             }
         }
 
-        private bool RemoveWallSegment(RoomBlueprint bp, float targetX, float targetZ, float epsilonX = 0.6f, float epsilonZ = 0.6f)
+        private int RemoveWallSegments(RoomBlueprint bp, float targetX, float targetZ, float halfWidth, float halfDepth)
         {
-            int bestIndex = -1;
-            float bestDist = float.MaxValue;
-
-            for (int i = 0; i < bp.nodes.Count; i++)
+            int removed = 0;
+            for (int i = bp.nodes.Count - 1; i >= 0; i--)
             {
                 var n = bp.nodes[i];
                 if (n.itemID == null || !n.itemID.Contains("Wall")) continue;
-                if (Mathf.Abs(n.position.x - targetX) > epsilonX) continue;
-                if (Mathf.Abs(n.position.z - targetZ) > epsilonZ) continue;
-
-                float dist = Mathf.Abs(n.position.x - targetX) + Mathf.Abs(n.position.z - targetZ);
-                if (dist < bestDist)
-                {
-                    bestDist = dist;
-                    bestIndex = i;
-                }
+                if (Mathf.Abs(n.position.x - targetX) > halfWidth) continue;
+                if (Mathf.Abs(n.position.z - targetZ) > halfDepth) continue;
+                bp.nodes.RemoveAt(i);
+                removed++;
             }
+            return removed;
+        }
 
-            if (bestIndex >= 0)
+        private Vector3 GetDoorFootprintSize()
+        {
+            if (m_RoomBuilders.Count == 0) return Vector3.one;
+            var db = m_RoomBuilders[0].database;
+            if (db == null) return Vector3.one;
+
+            ItemDefinition def = db.Find(d => d != null && (d.itemID == "DoorSystem" || d.itemID.ToLower().Contains("door")));
+            if (def == null) return Vector3.one;
+
+            if (def.prefab != null && TryGetPrefabBounds(def.prefab, out var b))
             {
-                bp.nodes.RemoveAt(bestIndex);
-                return true;
+                return b.size;
             }
-            return false;
+            return def.logicalSize;
+        }
+
+        private bool TryGetPrefabBounds(GameObject prefab, out Bounds bounds)
+        {
+            bounds = new Bounds(Vector3.zero, Vector3.zero);
+            if (prefab == null) return false;
+
+            bool hasBounds = false;
+            foreach (var r in prefab.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.name.Contains("Outline") || r is ParticleSystemRenderer) continue;
+                if (!hasBounds) { bounds = r.bounds; hasBounds = true; }
+                else bounds.Encapsulate(r.bounds);
+            }
+            if (hasBounds) return true;
+
+            foreach (var c in prefab.GetComponentsInChildren<Collider>(true))
+            {
+                if (!hasBounds) { bounds = c.bounds; hasBounds = true; }
+                else bounds.Encapsulate(c.bounds);
+            }
+            return hasBounds;
         }
 
 

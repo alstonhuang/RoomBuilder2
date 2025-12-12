@@ -274,12 +274,15 @@ namespace MyGame.Adapters.Unity
         private void AlignDoorToFloor(Transform door)
         {
             if (door == null) return;
-            if (TryGetBounds(door.gameObject, out var bounds))
+            if (!TryGetBounds(door.gameObject, out var bounds)) return;
+
+            // Raycast to the floor and place the door so its bounds.min.y aligns to the hit point.
+            Vector3 rayStart = door.position + Vector3.up * 5f;
+            if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 20f))
             {
-                float roomBottom = transform.position.y - (roomSize.y / 2f);
-                float targetY = roomBottom + bounds.extents.y;
+                float bottomOffset = bounds.min.y - door.position.y; // how far the current min is below the pivot
                 Vector3 p = door.position;
-                p.y = targetY;
+                p.y = hit.point.y - bottomOffset;
                 door.position = p;
             }
         }
