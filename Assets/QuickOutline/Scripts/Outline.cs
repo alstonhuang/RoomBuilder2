@@ -85,9 +85,17 @@ public class Outline : MonoBehaviour {
     // Cache renderers
     renderers = GetComponentsInChildren<Renderer>();
 
-    // Instantiate outline materials
-    outlineMaskMaterial = Instantiate(Resources.Load<Material>(@"Materials/OutlineMask"));
-    outlineFillMaterial = Instantiate(Resources.Load<Material>(@"Materials/OutlineFill"));
+        // Instantiate outline materials (gracefully fail if resources are missing)
+        var maskSrc = Resources.Load<Material>(@"Materials/OutlineMask");
+        var fillSrc = Resources.Load<Material>(@"Materials/OutlineFill");
+        if (maskSrc == null || fillSrc == null)
+        {
+            Debug.LogWarning("[QuickOutline] Outline materials not found under Resources/Materials. Disabling outline.");
+            enabled = false;
+            return;
+        }
+        outlineMaskMaterial = Instantiate(maskSrc);
+        outlineFillMaterial = Instantiate(fillSrc);
 
     outlineMaskMaterial.name = "OutlineMask (Instance)";
     outlineFillMaterial.name = "OutlineFill (Instance)";

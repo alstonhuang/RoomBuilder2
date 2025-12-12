@@ -3,47 +3,89 @@ using UnityEngine;
 public class DoorController : MonoBehaviour
 {
     public bool isLocked = true;
+    [Tooltip("Optional hinge pivot; if null will auto-find a child named 'DoorHinge' or fall back to self.")]
+    public Transform hinge;
     
-    // 門打開的角度 / 關閉的角度
+    // 開/關旋轉角度
     private float openAngle = 90f; 
     private float closeAngle = 0f;
     
     private bool isOpen = false;
+    private Transform _pivot;
+    [SerializeField] private bool debugLog = false;
+
+    void Awake()
+    {
+        // Prefer explicit hinge, otherwise search in self and children for a DoorHinge/Hinge transform.
+        _pivot = hinge;
+        if (_pivot == null)
+        {
+            foreach (var t in GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "DoorHinge" || t.name == "Hinge")
+                {
+                    _pivot = t;
+                    break;
+                }
+            }
+        }
+        if (_pivot == null) _pivot = transform;
+
+        // Only move the actual door leaf under the hinge; keep frames static.
+        var all = GetComponentsInChildren<Transform>(true);
+        foreach (var t in all)
+        {
+            if (t == _pivot) continue;
+            if (t.IsChildOf(_pivot)) continue;
+
+            string n = t.name.ToLower();
+            bool looksLikeDoor = n.Contains("door"); // avoid reparenting Frame_* panels
+            bool hasRenderable = t.GetComponent<Renderer>() != null || t.GetComponent<Collider>() != null;
+            if (looksLikeDoor && hasRenderable)
+            {
+                t.SetParent(_pivot, true); // keep world pose
+            }
+        }
+    }
+
+    void OnEnable()
+    {
+        // Ensure hinge is parented to this door root so local rotation is relative to the frame.
+        if (_pivot != null && _pivot.parent != transform)
+        {
+            _pivot.SetParent(transform, true); // keep world pose
+        }
+        ResetClosed();
+        if (debugLog) Debug.Log($"[DoorController] OnEnable reset. isOpen={isOpen} pivot={_pivot?.name}");
+    }
 
     void Update()
     {
-        // 平滑旋轉邏輯
         float targetAngleY = isOpen ? openAngle : closeAngle;
         Quaternion targetRotation = Quaternion.Euler(0, targetAngleY, 0);
-        transform.localRotation = Quaternion.Slerp(transform.localRotation, targetRotation, Time.deltaTime * 5f);
+        if (_pivot == null) _pivot = transform;
+        _pivot.localRotation = Quaternion.Slerp(_pivot.localRotation, targetRotation, Time.deltaTime * 5f);
     }
 
-    // 這個函式是用來被 Interactable 呼叫的
+    // 由 Interactable 呼叫
     public void TryOpen()
     {
-        // 如果門是鎖著的
         if (isLocked)
         {
-            // 1. 找到玩家 (大腦)
-            PlayerInteraction player = FindAnyObjectByType<PlayerInteraction>();
-            
-            // 2. 檢查玩家是否存在，而且「有沒有鑰匙 (HasKey)」
+            var player = FindAnyObjectByType<PlayerInteraction>();
             if (player != null && player.HasKey())
             {
-                // 有鑰匙！解鎖並開門
                 UnlockDoor();
                 isOpen = true; 
-                Debug.Log("使用了鑰匙，門開了！");
+                Debug.Log("使用了鑰匙，門已解鎖並打開");
             }
             else
             {
-                // 沒鑰匙，或者找不到玩家
-                Debug.Log("門鎖住了！需要鑰匙。");
+                Debug.Log("需要鑰匙才能打開這扇門");
             }
         }
         else
         {
-            // 如果本來就沒鎖，直接開關
             isOpen = !isOpen; 
         }
     }
@@ -51,6 +93,22 @@ public class DoorController : MonoBehaviour
     public void UnlockDoor()
     {
         isLocked = false;
-        Debug.Log("門已解鎖！");
+        Debug.Log("門已解鎖");
+    }
+
+    private void ResetClosed()
+    {
+        isOpen = false;
+        if (_pivot != null) _pivot.localRotation = Quaternion.Euler(0, closeAngle, 0);
+        if (_pivot != null)
+        {
+            // Door leafs under pivot should start at identity so pivot rotation fully controls them.
+            foreach (var t in _pivot.GetComponentsInChildren<Transform>(true))
+            {
+                if (t == _pivot) continue;
+                string n = t.name.ToLower();
+                if (n.Contains("door")) t.localRotation = Quaternion.identity;
+            }
+        }
     }
 }

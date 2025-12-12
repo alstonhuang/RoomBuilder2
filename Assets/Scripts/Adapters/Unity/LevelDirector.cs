@@ -169,6 +169,15 @@ namespace MyGame.Adapters.Unity
 
                 int removedWall = RemoveWallSegments(room.blueprint, doorPosX, doorPosZ, halfX, halfZ);
                 Debug.Log($"Single-room door added to {room.name}, wall removed={removedWall}");
+
+                // Drop a key in the single room so the player can open the door.
+                room.blueprint.nodes.Add(new PropNode
+                {
+                    instanceID = $"Key_{room.name}_Single",
+                    itemID = "Key",
+                    position = new SimpleVector3(0, 1, 0),
+                    rotation = new SimpleVector3(0, 0, 0)
+                });
                 return;
             }
 

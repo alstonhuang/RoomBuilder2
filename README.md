@@ -2,6 +2,10 @@
 
 # Unity Procedural Room Generator (PCG)
 
+## 已知問題
+1. Focus 時沒有顯示 outline。
+2. 門板仍以中心為軸旋轉開門（應以側邊 pivot）。
+
 這是一個基於 **Clean Architecture** (整潔架構) 的 Unity 程序化房間生成系統。專案核心採用 **純 C# 邏輯層 (Core)** 與 **引擎實作層 (Adapter)** 分離的設計，實現了從宏觀佈局到微觀物品散佈的自動化生成。
 
 目前版本：**v0.6.3 (Door Placement & Carve Fixes)**
@@ -125,6 +129,7 @@ Assets/
 ### v0.6.3 - Door Placement & Carve Fixes (Latest)
 *   **門貼地對齊：** 門生成後改用 raycast 探地，依 prefab bounds 底部對齊地板，避免門浮空。
 *   **門洞挖牆加大：** 依門 prefab 實際寬/深自動計算開口，移除門口 footprint 內的所有牆段，避免只挖掉一塊牆。
+*   **門軸旋轉：** 支援 hinge 子物件（DoorHinge/Hinge）作為旋轉樞紐，避免門在中間原地旋轉。
 *   **日誌：** 連接房間時會輸出實際移除的牆段數，方便檢查。
 
 ### v0.6.2 - Player Auto-Spawn & UI Fixes

@@ -9,7 +9,7 @@ namespace MyGame.Core
     }
 
     public class ItemContainer : IContainer
-    {
+    { 
         private string _itemID;
         private IItemLibrary _library;
         private Random _random;

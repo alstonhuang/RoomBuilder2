@@ -182,10 +182,10 @@ namespace MyGame.Adapters.Unity
                     go.transform.localRotation = rot;
                 }
 
-                // Align door to floor, but do not rescale (keep prefab-defined size).
+                // Align/scale door to match wall height/thickness and sit on floor.
                 if (node.itemID.ToLower().Contains("door"))
                 {
-                    AlignDoorToFloor(go.transform);
+                    AlignDoorToFloor(go.transform, GetWallSize(defMap));
                 }
 
                 spawned[node.instanceID] = go.transform;
@@ -271,12 +271,23 @@ namespace MyGame.Adapters.Unity
             foreach (var c in allColliders) c.enabled = true;
         }
         
-        private void AlignDoorToFloor(Transform door)
+        private void AlignDoorToFloor(Transform door, Vector3 wallSize)
         {
             if (door == null) return;
+            
+            // Scale door to match wall height/depth so it fills the opening vertically.
+            if (wallSize != Vector3.zero)
+            {
+                Vector3 s = door.localScale;
+                s.y = wallSize.y;
+                s.z = wallSize.z > 0 ? wallSize.z : s.z;
+                door.localScale = s;
+            }
+
             if (!TryGetBounds(door.gameObject, out var bounds)) return;
 
-            // Raycast to the floor and place the door so its bounds.min.y aligns to the hit point.
+            // Raycast to the floor and place the door so its bounds.min.y aligns to the hit point
+            // (after scaling).
             Vector3 rayStart = door.position + Vector3.up * 5f;
             if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 20f))
             {
