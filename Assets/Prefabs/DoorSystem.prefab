@@ -459,6 +459,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   isLocked: 1
   hinge: {fileID: 1059856508551665965}
+  hingeLocalOffset: {x: 0, y: 0, z: 0}
   debugLog: 0
 --- !u!114 &2721561395293051599
 MonoBehaviour:
@@ -519,7 +520,7 @@ Transform:
   m_GameObject: {fileID: 7627695929015304617}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.55, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 2, z: 0.2}
   m_ConstrainProportionsScale: 0
   m_Children: []

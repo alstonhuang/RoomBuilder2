@@ -2,13 +2,9 @@
 
 # Unity Procedural Room Generator (PCG)
 
-## 已知問題
-1. Focus 時沒有顯示 outline。
-2. 門板仍以中心為軸旋轉開門（應以側邊 pivot）。
-
 這是一個基於 **Clean Architecture** (整潔架構) 的 Unity 程序化房間生成系統。專案核心採用 **純 C# 邏輯層 (Core)** 與 **引擎實作層 (Adapter)** 分離的設計，實現了從宏觀佈局到微觀物品散佈的自動化生成。
 
-目前版本：**v0.6.3 (Door Placement & Carve Fixes)**
+目前版本：**v0.6.4 (Door Hinge Alignment & Interaction)**
 
 ## 🌟 專案特色
 
@@ -23,6 +19,7 @@
 *   **可選牆面生成：** 可針對每個房間的四個邊單獨關閉牆面，用於多房間共用牆。
 *   **門框自適應：** 生成的門會依照牆厚與房高自動縮放，避免懸空或厚度不符。
 *   **玩家自動生成：** LevelDirector 可自動生成玩家（附滑鼠視角、移動、互動與 UI 準心），並自動確保場景中只有一個 Audio Listener。
+*   **門鉸鏈自動對齊：** 門板可自動把旋轉軸對齊到門葉左/右邊緣，避免中心旋轉。
 
 ## 📂 專案結構
 
@@ -93,6 +90,11 @@ Assets/
 *   在玩家 Prefab 內的 Canvas (Screen Space – Overlay) 放一個 `Crosshair` Image，並將該 Image 指到 `PlayerInteraction.crosshairImage`；Play 時看著可互動物件準心會變色。
 *   Audio Listener：`LevelDirector` 會優先保留玩家上的 Listener，其餘自動停用以避免多 Listener 警告。
 
+### 7. 門的鉸鏈設定 (Door Hinge)
+*   `DoorController` 支援自動尋找 `DoorHinge/Hinge` 節點；若為空則回退到自身。
+*   `autoAlignHinge` 可將鉸鏈自動對齊門板左/右邊緣（`hingeOnLeft` 控制方向）；或自行填 `hingeLocalOffset` 微調。
+*   Prefab: `DoorSystem` 已更新為邊緣鉸鏈旋轉，避免門板以中心旋轉。
+
 ### 選項：使用匯入套件的生成器
 若要使用已封存的匯入套件版本（`MyGame_1.Core.RoomGenerator`）：
 1.  在同一 GameObject 上再掛一個 `RoomGenerator` Component （位於 `Assets/Archive/ImportedCoreBackup/RoomGenerator.cs`）。
@@ -126,7 +128,12 @@ Assets/
 
 ## 📝 版本歷程 (Changelog)
 
-### v0.6.3 - Door Placement & Carve Fixes (Latest)
+### v0.6.4 - Door Hinge Alignment & Interaction (Latest)
+*   **門鉸鏈自動對齊：** `DoorController` 可自動將 pivot 對齊門葉左/右側邊界，並支援手動 offset。
+*   **門 Prefab 更新：** `DoorSystem` 調整鉸鏈配置，旋轉軸不再在中心。
+*   **互動射線防呆：** `PlayerInteraction` 可指定射線來源、LayerMask、是否包含 Trigger，缺省會自動選用相機。
+
+### v0.6.3 - Door Placement & Carve Fixes
 *   **門貼地對齊：** 門生成後改用 raycast 探地，依 prefab bounds 底部對齊地板，避免門浮空。
 *   **門洞挖牆加大：** 依門 prefab 實際寬/深自動計算開口，移除門口 footprint 內的所有牆段，避免只挖掉一塊牆。
 *   **門軸旋轉：** 支援 hinge 子物件（DoorHinge/Hinge）作為旋轉樞紐，避免門在中間原地旋轉。
