@@ -5,6 +5,11 @@ public class DoorController : MonoBehaviour
     public bool isLocked = true;
     [Tooltip("Optional hinge pivot; if null will auto-find a child named 'DoorHinge' or fall back to self.")]
     public Transform hinge;
+    [Tooltip("Optional local offset applied to the hinge after setup (useful when the pivot sits at the door center).")]
+    public Vector3 hingeLocalOffset = Vector3.zero;
+    [Tooltip("Auto-align the hinge to the left/right edge of the door leaf when no offset is provided.")]
+    public bool autoAlignHinge = true;
+    public bool hingeOnLeft = true; // Left = min local X, Right = max local X
     
     // 開/關旋轉角度
     private float openAngle = 90f; 
@@ -46,6 +51,9 @@ public class DoorController : MonoBehaviour
                 t.SetParent(_pivot, true); // keep world pose
             }
         }
+
+        AutoAlignPivotOffset();
+        ApplyPivotOffset();
     }
 
     void OnEnable()
@@ -110,6 +118,59 @@ public class DoorController : MonoBehaviour
                 string n = t.name.ToLower();
                 if (n.Contains("door")) t.localRotation = Quaternion.identity;
             }
+        }
+    }
+
+    private void AutoAlignPivotOffset()
+    {
+        if (!autoAlignHinge) return;
+        if (hingeLocalOffset != Vector3.zero) return;
+        if (_pivot == null) return;
+
+        var renderers = _pivot.GetComponentsInChildren<Renderer>(true);
+        if (renderers == null || renderers.Length == 0) return;
+
+        bool hasBounds = false;
+        Vector3 worldMin = Vector3.zero;
+        Vector3 worldMax = Vector3.zero;
+        foreach (var r in renderers)
+        {
+            if (r == null) continue;
+            if (!hasBounds)
+            {
+                worldMin = r.bounds.min;
+                worldMax = r.bounds.max;
+                hasBounds = true;
+            }
+            else
+            {
+                worldMin = Vector3.Min(worldMin, r.bounds.min);
+                worldMax = Vector3.Max(worldMax, r.bounds.max);
+            }
+        }
+        if (!hasBounds) return;
+
+        Vector3 localMin = _pivot.InverseTransformPoint(worldMin);
+        Vector3 localMax = _pivot.InverseTransformPoint(worldMax);
+        float targetX = hingeOnLeft ? localMin.x : localMax.x;
+
+        hingeLocalOffset = new Vector3(targetX, 0f, 0f);
+        if (debugLog) Debug.Log($"[DoorController] Auto-aligned hinge offset to {hingeLocalOffset} (side={(hingeOnLeft ? "Left" : "Right")}) on {name}");
+    }
+
+    private void ApplyPivotOffset()
+    {
+        if (_pivot == null) return;
+        if (hingeLocalOffset == Vector3.zero) return;
+
+        // Move the pivot while preserving child world positions.
+        var children = new System.Collections.Generic.List<Transform>();
+        foreach (Transform t in _pivot) children.Add(t);
+
+        _pivot.localPosition += hingeLocalOffset;
+        foreach (var child in children)
+        {
+            child.position -= _pivot.TransformVector(hingeLocalOffset);
         }
     }
 }
