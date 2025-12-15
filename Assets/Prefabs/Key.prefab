@@ -151,7 +151,7 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-  outlineScript: {fileID: 0}
+  outlineScript: {fileID: 5801234567890123456}
 --- !u!114 &5801234567890123456
 MonoBehaviour:
   m_ObjectHideFlags: 0

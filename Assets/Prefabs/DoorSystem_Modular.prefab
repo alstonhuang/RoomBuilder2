@@ -1,4 +1,4 @@
-﻿%YAML 1.1
+%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!1 &361278690907007778
 GameObject:
@@ -81,7 +81,7 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-  outlineScript: {fileID: 0}
+  outlineScript: {fileID: 1388260375507627503}
   debugInteract: 0
 --- !u!65 &8932038232359224345
 BoxCollider:
@@ -116,19 +116,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fca3b9ae9a97c7843a739db5cf82e863, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  frameSlot: {fileID: 5676585711375497055}
-  topSlot: {fileID: 0}
-  leftSlot: {fileID: 0}
-  rightSlot: {fileID: 0}
+  frameSlot: {fileID: 2449012823047781739}
+  topSlot: {fileID: 2449012823047781739}
+  leftSlot: {fileID: 2449012823047781739}
+  rightSlot: {fileID: 2449012823047781739}
   doorSlot: {fileID: 6886683958904914953}
-  framePrefab: {fileID: 100000, guid: c7bd79f25c690294f893f8905d2264f5, type: 3}
+  framePrefab: {fileID: 4411225053692264990}
   useSharedTrimPrefab: 1
   trimPrefab: {fileID: 9027840664315639774, guid: 9e7739b9fd6c0624085c40b88e4f72d9, type: 3}
   topPrefab: {fileID: 0}
   leftPrefab: {fileID: 0}
   rightPrefab: {fileID: 0}
-  doorPrefab: {fileID: 1815345801761848, guid: 6d34f074083a0dc4d9798f703bad35de, type: 3}
-  rebuildOnEnable: 0
+  doorPrefab: {fileID: 8859371741148500121}
+  rebuildOnEnable: 1
   createFallbackPrimitives: 1
   topSize: {x: 1, y: 0.2, z: 0.2}
   sideSize: {x: 0.2, y: 2, z: 0.2}
