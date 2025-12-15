@@ -172,6 +172,8 @@ namespace MyGame.Adapters.Unity
                 Vector3 pos = new Vector3(node.position.x, node.position.y, node.position.z);
                 Quaternion rot = Quaternion.Euler(node.rotation.x, node.rotation.y, node.rotation.z);
 
+                ApplyContainerSizing(go.transform, node);
+
                 // DoorSystem runtime adjust to avoid prefab scale layering issues
                 if (node.itemID.Equals("DoorSystem"))
                 {
@@ -205,6 +207,29 @@ namespace MyGame.Adapters.Unity
             }
             Debug.Log($"[{name}] Spawned {spawnedCount} objects.");
             return spawned;
+        }
+
+        private void ApplyContainerSizing(Transform target, Core.PropNode node)
+        {
+            if (target == null) return;
+
+            bool shouldFit = node.containerKind == Core.ContainerKind.Wall
+                             || node.containerKind == Core.ContainerKind.Floor
+                             || node.containerKind == Core.ContainerKind.Ceiling
+                             || node.containerKind == Core.ContainerKind.Door
+                             || node.containerKind == Core.ContainerKind.Window;
+            var size = node.logicalBounds.size;
+            if (!shouldFit || size.x <= 0 || size.y <= 0 || size.z <= 0) return;
+
+            if (TryGetBounds(target.gameObject, out var bounds))
+            {
+                Vector3 ratio = new Vector3(
+                    bounds.size.x != 0 ? size.x / bounds.size.x : 1f,
+                    bounds.size.y != 0 ? size.y / bounds.size.y : 1f,
+                    bounds.size.z != 0 ? size.z / bounds.size.z : 1f);
+
+                target.localScale = Vector3.Scale(target.localScale, ratio);
+            }
         }
 
         private void ApplyPhysicsSnapping(Dictionary<string, Transform> spawned, RoomBlueprint bp)
