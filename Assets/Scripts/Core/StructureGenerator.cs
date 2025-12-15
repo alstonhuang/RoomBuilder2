@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace MyGame.Core
 {
@@ -15,25 +15,25 @@ namespace MyGame.Core
         {
             var nodes = new List<PropNode>();
 
-            // 1. 取得地磚大小
+            // 1. ???啁?憭批?
             SimpleVector3 tileSize = _library.GetItemSize(floorItemID);
             if (tileSize.x <= 0 || tileSize.z <= 0) return nodes;
 
-            // 2. 計算 X, Z 起點 (保持不變)
+            // 2. 閮? X, Z 韏琿? (靽?銝?)
             float startX = roomBounds.center.x - (roomBounds.size.x / 2) + (tileSize.x / 2);
             float startZ = roomBounds.center.z - (roomBounds.size.z / 2) + (tileSize.z / 2);
             float endX = roomBounds.center.x + (roomBounds.size.x / 2);
             float endZ = roomBounds.center.z + (roomBounds.size.z / 2);
 
-            // 🛑 3. 修正 Y 軸計算：對齊房間底部
-            // 房間底部 = 中心Y - (高度 / 2)
+            // ?? 3. 靽格迤 Y 頠貉?蝞?撠??輸?摨
+            // ?輸?摨 = 銝剖?Y - (擃漲 / 2)
             float roomBottomY = roomBounds.center.y - (roomBounds.size.y / 2);
             
-            // 地板的位置 = 房間底部 - (地磚厚度 / 2)
-            // 這樣地板的 "表面" 就會剛好切齊房間的底部線
+            // ?唳??蝵?= ?輸?摨 - (?啁??漲 / 2)
+            // ?見?唳??"銵券" 撠望??末???輸????函?
             float yPos = roomBottomY - (tileSize.y / 2);
 
-            // 4. 迴圈生成
+            // 4. 餈游???
             for (float x = startX; x < endX; x += tileSize.x)
             {
                 for (float z = startZ; z < endZ; z += tileSize.z)
@@ -43,15 +43,18 @@ namespace MyGame.Core
                         instanceID = $"Floor_{x}_{z}",
                         itemID = floorItemID,
                         parentID = null,
-                        position = new SimpleVector3(x, yPos, z), // 👈 使用修正後的高度
-                        rotation = SimpleVector3.Zero
+                        position = new SimpleVector3(x, yPos, z), // ?? 雿輻靽格迤敺?擃漲
+                        rotation = SimpleVector3.Zero,
+                        containerKind = ContainerKind.Floor,
+                        logicalBounds = new SimpleBounds(new SimpleVector3(x, yPos, z), tileSize),
+                        facing = Facing.Up
                     });
                 }
             }
             return nodes;
         } // end of GenerateFloor
 
-        // 👇 新增牆壁生成邏輯
+        // ?? ?啣??????摩
         public List<PropNode> GenerateWalls(SimpleBounds roomBounds, string wallItemID,
                                             bool skipNorth, bool skipSouth,
                                             bool skipEast, bool skipWest)
@@ -70,60 +73,62 @@ namespace MyGame.Core
             float zMin = roomBounds.center.z - depth / 2;
             float zMax = roomBounds.center.z + depth / 2;
 
-            // 1. 南牆 (South Wall) - 沿著 X 軸，Z 固定在 zMin
-            // 面向北 (Rot Y = 0)
+            // 1. ?? (South Wall) - 瘝輯? X 頠賂?Z ?箏???zMin
+            // ?Ｗ???(Rot Y = 0)
             if (!skipSouth)
             {
                 for (float x = xMin; x < xMax; x += wallSize.x)
                 {
-                    nodes.Add(CreateWallNode(wallItemID, x + wallSize.x/2, zMin, 0));
+                    nodes.Add(CreateWallNode(wallItemID, wallSize, x + wallSize.x/2, zMin, 0, Facing.South));
                 }
             }
 
-            // 2. 北牆 (North Wall) - 沿著 X 軸，Z 固定在 zMax
-            // 面向南 (Rot Y = 180)
+            // 2. ?? (North Wall) - 瘝輯? X 頠賂?Z ?箏???zMax
+            // ?Ｗ???(Rot Y = 180)
             if (!skipNorth)
             {
                 for (float x = xMin; x < xMax; x += wallSize.x)
                 {
-                    nodes.Add(CreateWallNode(wallItemID, x + wallSize.x/2, zMax, 180));
+                    nodes.Add(CreateWallNode(wallItemID, wallSize, x + wallSize.x/2, zMax, 180, Facing.North));
                 }
             }
 
-            // 3. 西牆 (West Wall) - 沿著 Z 軸，X 固定在 xMin
-            // 面向東 (Rot Y = 90)
+            // 3. 镼輻? (West Wall) - 瘝輯? Z 頠賂?X ?箏???xMin
+            // ?Ｗ???(Rot Y = 90)
             if (!skipWest)
             {
-                for (float z = zMin; z < zMax; z += wallSize.x) // 注意這裡間距用 wallSize.x (牆寬)
+                for (float z = zMin; z < zMax; z += wallSize.x) // 瘜冽??ㄐ????wallSize.x (?祝)
                 {
-                    nodes.Add(CreateWallNode(wallItemID, xMin, z + wallSize.x/2, 90));
+                    nodes.Add(CreateWallNode(wallItemID, wallSize, xMin, z + wallSize.x/2, 90, Facing.West));
                 }
             }
 
-            // 4. 東牆 (East Wall) - 沿著 Z 軸，X 固定在 xMax
-            // 面向西 (Rot Y = 270)
+            // 4. ?梁? (East Wall) - 瘝輯? Z 頠賂?X ?箏???xMax
+            // ?Ｗ?镼?(Rot Y = 270)
             if (!skipEast)
             {
                 for (float z = zMin; z < zMax; z += wallSize.x)
                 {
-                    nodes.Add(CreateWallNode(wallItemID, xMax, z + wallSize.x/2, 270));
+                    nodes.Add(CreateWallNode(wallItemID, wallSize, xMax, z + wallSize.x/2, 270, Facing.East));
                 }
             }
             return nodes;
         } // end of GenerateWalls
 
-        private PropNode CreateWallNode(string itemID, float x, float z, float yRot)
+        private PropNode CreateWallNode(string itemID, SimpleVector3 wallSize, float x, float z, float yRot, Facing facing)
         {
             return new PropNode
             {
                 instanceID = $"Wall_{x}_{z}",
                 itemID = itemID,
                 parentID = null,
-                // Y = 1.5 是因為牆高 3米，中心點在 1.5 (如果 Pivot 在底部則設為 0)
-                // 這裡假設 Pivot 在底部 (符合之前的修正建議)
-                position = new SimpleVector3(x, 0, z), 
-                rotation = new SimpleVector3(0, yRot, 0)
+                position = new SimpleVector3(x, 0, z),
+                rotation = new SimpleVector3(0, yRot, 0),
+                containerKind = ContainerKind.Wall,
+                logicalBounds = new SimpleBounds(new SimpleVector3(x, 0, z), wallSize),
+                facing = facing
             };
-        } // end of CreateWallNode
+        }
+        // end of CreateWallNode
     } // end of class
 } // end of namespace

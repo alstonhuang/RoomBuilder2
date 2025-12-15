@@ -37,7 +37,9 @@ namespace MyGame.Core
                 itemID = _itemID,
                 parentID = parentID,
                 position = bounds.center,
-                rotation = SimpleVector3.Zero
+                rotation = SimpleVector3.Zero,
+                containerKind = ContainerKind.Unknown,
+                logicalBounds = bounds
             });
 
             // 3. 連鎖反應 (生成子物件)
@@ -87,7 +89,9 @@ namespace MyGame.Core
                                 itemID = finalTargetID,
                                 parentID = myInstanceID,
                                 position = rule.offset,
-                                rotation = SimpleVector3.Zero
+                                rotation = SimpleVector3.Zero,
+                                containerKind = ContainerKind.Unknown,
+                                logicalBounds = bounds
                             });
                             break;
                     }
@@ -133,5 +137,119 @@ namespace MyGame.Core
             result.AddRange(_childB.Resolve(boundsB, parentID));
             return result;
         }
+    }
+
+    /// <summary>
+    /// Generic container that places a single logical node (e.g., Floor, Wall, Corner) with metadata.
+    /// </summary>
+    public class PrimitiveContainer : IContainer
+    {
+        private readonly string _itemID;
+        private readonly ContainerKind _kind;
+        private readonly Facing _facing;
+        private readonly SimpleVector3 _rotation;
+
+        public PrimitiveContainer(string itemID, ContainerKind kind, Facing facing = Facing.None, SimpleVector3? rotation = null)
+        {
+            _itemID = itemID;
+            _kind = kind;
+            _facing = facing;
+            _rotation = rotation ?? SimpleVector3.Zero;
+        }
+
+        public List<PropNode> Resolve(SimpleBounds bounds, string parentID)
+        {
+            var node = new PropNode
+            {
+                instanceID = $"{_itemID}_{Guid.NewGuid():N}".Substring(0, 12),
+                itemID = _itemID,
+                parentID = parentID,
+                position = bounds.center,
+                rotation = _rotation,
+                containerKind = _kind,
+                logicalBounds = bounds,
+                facing = _facing
+            };
+            return new List<PropNode> { node };
+        }
+    }
+
+    /// <summary>
+    /// Composite region container that can emit itself (as a logical region) and its children.
+    /// </summary>
+    public class RegionContainer : IContainer
+    {
+        private readonly List<IContainer> _children;
+        private readonly bool _emitSelf;
+        private readonly string _itemID;
+        private readonly Facing _facing;
+
+        public RegionContainer(IEnumerable<IContainer> children, bool emitSelf = false, string itemID = "Region", Facing facing = Facing.None)
+        {
+            _children = new List<IContainer>(children);
+            _emitSelf = emitSelf;
+            _itemID = itemID;
+            _facing = facing;
+        }
+
+        public List<PropNode> Resolve(SimpleBounds bounds, string parentID)
+        {
+            var result = new List<PropNode>();
+            string myId = parentID;
+            if (_emitSelf)
+            {
+                myId = $"{_itemID}_{Guid.NewGuid():N}".Substring(0, 12);
+                result.Add(new PropNode
+                {
+                    instanceID = myId,
+                    itemID = _itemID,
+                    parentID = parentID,
+                    position = bounds.center,
+                    rotation = SimpleVector3.Zero,
+                    containerKind = ContainerKind.Region,
+                    logicalBounds = bounds,
+                    facing = _facing
+                });
+            }
+
+            foreach (var child in _children)
+            {
+                result.AddRange(child.Resolve(bounds, myId));
+            }
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Convenience containers for walls/doors/windows/corners.
+    /// </summary>
+    public class WallContainer : PrimitiveContainer
+    {
+        public WallContainer(string itemID, Facing facing) : base(itemID, ContainerKind.Wall, facing) { }
+    }
+
+    public class CornerContainer : PrimitiveContainer
+    {
+        public CornerContainer(string itemID) : base(itemID, ContainerKind.Corner, Facing.None) { }
+    }
+
+    public class FloorContainer : PrimitiveContainer
+    {
+        public FloorContainer(string itemID) : base(itemID, ContainerKind.Floor, Facing.Up) { }
+    }
+
+    public class CeilingContainer : PrimitiveContainer
+    {
+        public CeilingContainer(string itemID) : base(itemID, ContainerKind.Ceiling, Facing.Down) { }
+    }
+
+    public class DoorContainer : PrimitiveContainer
+    {
+        public DoorContainer(string itemID, Facing facing) : base(itemID, ContainerKind.Door, facing) { }
+    }
+
+    public class WindowContainer : PrimitiveContainer
+    {
+        public WindowContainer(string itemID, Facing facing) : base(itemID, ContainerKind.Window, facing) { }
     }
 }
