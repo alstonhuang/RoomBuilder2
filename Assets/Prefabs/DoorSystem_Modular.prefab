@@ -81,7 +81,7 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-  outlineScript: {fileID: 1388260375507627503}
+  outlineScript: {fileID: 0}
   debugInteract: 0
 --- !u!65 &8932038232359224345
 BoxCollider:
