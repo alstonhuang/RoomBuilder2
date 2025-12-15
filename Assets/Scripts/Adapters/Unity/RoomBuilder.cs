@@ -1,5 +1,5 @@
-using System.Collections.Generic;
-using System.Linq; // 👈 新增這行，為了用 ToList() 安全刪除
+﻿using System.Collections.Generic;
+using System.Linq; // ?? ?啣???嚗鈭 ToList() 摰?芷
 using UnityEngine;
 using MyGame.Core;
 using ILogger = MyGame.Core.ILogger;
@@ -12,9 +12,9 @@ namespace MyGame.Adapters.Unity
         public List<ItemDefinition> database;
         public List<RoomTheme> themeDatabase;
         
-        [Header("生成設定")]
+        [Header("??閮剖?")]
         public string themeToBuild = "LivingRoom";
-        public Vector3 roomSize = new Vector3(10, 2, 10); // 高度設為 2 比較容易看清楚
+        public Vector3 roomSize = new Vector3(10, 2, 10); // 擃漲閮剔 2 瘥?摰寞???璆?
 
         public RoomBlueprint blueprint;
 
@@ -43,20 +43,20 @@ namespace MyGame.Adapters.Unity
         }
 
         // ==========================================
-        // 1. 新增清除功能
+        // 1. ?啣?皜?
         // ==========================================
         [ContextMenu("Clear All")]
         public void Clear()
         {
-            // 使用 ToList() 轉成清單再刪除，避免在迴圈中修改集合導致錯誤
+            // 雿輻 ToList() 頧?皜??歹??踹??刻艘?葉靽格??撠?航炊
             var children = transform.Cast<Transform>().ToList();
             foreach (var child in children)
             {
-                // 在編輯模式下必須用 DestroyImmediate
+                // ?函楊頛舀芋撘?敹???DestroyImmediate
                 if (Application.isPlaying) Destroy(child.gameObject);
                 else DestroyImmediate(child.gameObject);
             }
-            Debug.Log("[RoomBuilder] 已清除所有生成的物件。"); 
+            Debug.Log("[RoomBuilder] 撌脫??斗??????拐辣??); 
         }
 
         [ContextMenu("Generate Blueprint")] 
@@ -120,6 +120,12 @@ namespace MyGame.Adapters.Unity
 
         public Dictionary<string, Transform> BuildFromBlueprint(RoomBlueprint bp)
         {
+            if (bp.containers != null && bp.containers.Count > 0)
+            {
+                bp.nodes = bp.containers[0].FlattenToPropNodes().ToList();
+                Debug.Log($"[{name}] Using container tree, flattened {bp.nodes.Count} nodes.");
+            }
+
             Debug.Log($"[{name}] BuildFromBlueprint processing {bp.nodes.Count} nodes.");
             var spawned = new Dictionary<string, Transform>();
             var defMap = new Dictionary<string, ItemDefinition>();
@@ -237,20 +243,20 @@ namespace MyGame.Adapters.Unity
             Physics.SyncTransforms();
             foreach (var node in bp.nodes)
             {
-                // 地板不需要落地 (它已經在 StructureGenerator 算好位置了)
+                // ?唳銝?閬??(摰歇蝬 StructureGenerator 蝞末雿蔭鈭?
                 if (node.itemID.Contains("Floor")) continue;
 
                 if (spawned.TryGetValue(node.instanceID, out var child))
                 {
-                    // 判斷是否有父物件
+                    // ?斗?臬??拐辣
                     if (!string.IsNullOrEmpty(node.parentID) && spawned.TryGetValue(node.parentID, out var parent))
                     {
-                        // 杯子貼桌子
+                        // ?臬?鞎潭?摮?
                         SnapChildToParentSurface(child, parent);
                     }
                     else
                     {
-                        // 桌子貼地板 (如果 StructureGenerator 算得準，其實這步是保險)
+                        // 獢?鞎澆??(憒? StructureGenerator 蝞?皞??嗅祕?郊?臭???
                         SnapToGround(child);
                     }
                 }
@@ -275,12 +281,12 @@ namespace MyGame.Adapters.Unity
         private void SnapToGround(Transform item)
         {
             float bottomOffset = 0;
-            // 取得所有子物件的 Collider (包含自己和上面的杯子)
+            // ??????拐辣??Collider (??芸楛???Ｙ??臬?)
             var allColliders = item.GetComponentsInChildren<Collider>();
             
             if (allColliders.Length > 0)
             {
-                // 計算最低點 (腳底板)
+                // 閮??雿? (?喳???
                 float minY = float.MaxValue;
                 foreach (var c in allColliders)
                 {
@@ -289,22 +295,22 @@ namespace MyGame.Adapters.Unity
                 bottomOffset = item.position.y - minY;
             }
 
-            // 🛑 關鍵步驟：暫時關閉所有 Collider
-            // 這樣射線才不會打到自己，導致浮在空中
+            // ?? ?甇仿?嚗??????Collider
+            // ?見撠??????啗撌梧?撠瘚桀蝛箔葉
             foreach (var c in allColliders) c.enabled = false;
 
-            // 抬高準備發射
+            // ?祇?皞??澆?
             Vector3 startPos = item.position + Vector3.up * 10f; 
             RaycastHit hit;
             
-            // 發射射線 (這裡可以加 LayerMask 確保只打地板，目前先打所有非自己的東西)
+            // ?澆?撠? (?ㄐ?臭誑??LayerMask 蝣箔??芣??唳嚗???????芸楛?镼?
             if (Physics.Raycast(startPos, Vector3.down, out hit, 50f))
             {
-                // 只有打到的不是自己 (雖然已經關閉了，雙重保險) 且距離合理才移動
+                // ?芣?????航撌?(?撌脩???鈭???靽) 銝??Ｗ???蝘餃?
                 item.position = hit.point + Vector3.up * bottomOffset;
             }
 
-            // ✅ 恢復步驟：重新開啟所有 Collider
+            // ???Ｗ儔甇仿?嚗??圈?????Collider
             foreach (var c in allColliders) c.enabled = true;
         }
         
@@ -450,10 +456,10 @@ namespace MyGame.Adapters.Unity
 
         void OnDrawGizmos()
         {
-            // 畫出黃色框框代表房間範圍
+            // ?怠暺獢?隞?”?輸?蝭?
             Gizmos.color = Color.yellow;
-            // 這裡要稍微計算一下 Gizmo 的中心，因為我們的 transform.position 通常在腳底
-            // 而 DrawWireCube 需要中心點
+            // ?ㄐ閬?敺株?蝞?銝?Gizmo ?葉敹???? transform.position ?虜?刻摨?
+            // ??DrawWireCube ?閬葉敹?
             Vector3 center = transform.position + new Vector3(0, roomSize.y / 2, 0);
             Gizmos.DrawWireCube(center, roomSize);
 
@@ -468,7 +474,7 @@ namespace MyGame.Adapters.Unity
             {
                 Gizmos.color = Color.red;
                 Gizmos.DrawWireCube(t.position, def.logicalSize);
-                // 只有家具才畫散佈圈，地板不用畫
+                // ?芣?摰嗅???????唳銝??
                 if (!id.Contains("Floor"))
                 {
                     Gizmos.color = Color.green;
