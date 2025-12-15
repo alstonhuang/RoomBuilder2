@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Data_DoorStytem
   m_EditorClassIdentifier: 
   itemID: DoorSystem
-  prefab: {fileID: 5816845892575805869, guid: 117ba21d10368904b8d720ed38a0485a, type: 3}
+  prefab: {fileID: 361278690907007778, guid: 5f0fd87e746c2594faacbfada3924ea3, type: 3}
   categoryTag: 
   logicalSize: {x: 2, y: 3, z: 0.5}
   minBounds: {x: 1, y: 1, z: 1}
