@@ -1,123 +1,233 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class DoorController : MonoBehaviour
 {
     public bool isLocked = true;
-    [Tooltip("Optional hinge pivot; if null will auto-find a child named 'DoorHinge' or fall back to self.")]
+
+    [Tooltip("Optional hinge pivot; if null will auto-find a child named 'DoorHinge' or 'Hinge' or fall back to self.")]
     public Transform hinge;
+
     [Tooltip("Optional local offset applied to the hinge after setup (useful when the pivot sits at the door center).")]
     public Vector3 hingeLocalOffset = Vector3.zero;
+
     [Tooltip("Auto-align the hinge to the left/right edge of the door leaf when no offset is provided.")]
     public bool autoAlignHinge = true;
-    public bool hingeOnLeft = true; // Left = min local X, Right = max local X
-    
-    // 開/關旋轉角度
-    private float openAngle = 90f; 
-    private float closeAngle = 0f;
-    
-    private bool isOpen = false;
-    private Transform _pivot;
+
+    public bool hingeOnLeft = true;
+
+    [SerializeField] private float openAngle = 90f;
+    [SerializeField] private float closeAngle = 0f;
+    [SerializeField] private float rotateSpeedDegPerSec = 240f;
     [SerializeField] private bool debugLog = false;
+
+    private bool _isOpen;
+    private int _openSign = 1;
+    private bool _openSignChosen;
+    private float _currentYaw;
+    private Transform _pivot;
+    private bool _pivotBaseCaptured;
+    private Vector3 _pivotBaseLocalPosition;
 
     void Awake()
     {
-        // Prefer explicit hinge, otherwise search in self and children for a DoorHinge/Hinge transform.
-        _pivot = hinge;
-        if (_pivot == null)
-        {
-            foreach (var t in GetComponentsInChildren<Transform>(true))
-            {
-                if (t.name == "DoorHinge" || t.name == "Hinge")
-                {
-                    _pivot = t;
-                    break;
-                }
-            }
-        }
-        if (_pivot == null) _pivot = transform;
-
-        // Only move the actual door leaf under the hinge; keep frames static.
-        var all = GetComponentsInChildren<Transform>(true);
-        foreach (var t in all)
-        {
-            if (t == _pivot) continue;
-            if (t.IsChildOf(_pivot)) continue;
-
-            string n = t.name.ToLower();
-            bool looksLikeDoor = n.Contains("door"); // avoid reparenting Frame_* panels
-            bool hasRenderable = t.GetComponent<Renderer>() != null || t.GetComponent<Collider>() != null;
-            if (looksLikeDoor && hasRenderable)
-            {
-                t.SetParent(_pivot, true); // keep world pose
-            }
-        }
+        _pivot = ResolvePivot();
+        EnsureOnlyDoorRotates();
+        CapturePivotBaseLocalPosition();
 
         AutoAlignPivotOffset();
         ApplyPivotOffset();
     }
 
+    /// <summary>
+    /// Call this after runtime art rebuilds (e.g., DoorArtLoader.RebuildArt) so the controller can re-resolve the pivot
+    /// and ensure the door leaf is the only thing that rotates.
+    /// </summary>
+    public void RefreshAfterArt(bool resetClosed = true)
+    {
+        _pivot = ResolvePivot();
+        EnsureOnlyDoorRotates();
+        CapturePivotBaseLocalPosition();
+
+        if (autoAlignHinge)
+        {
+            AutoAlignPivotOffset();
+            ApplyPivotOffset();
+        }
+
+        if (resetClosed) ResetClosed();
+    }
+
     void OnEnable()
     {
+        if (_pivot == null) _pivot = ResolvePivot();
+
         // Ensure hinge is parented to this door root so local rotation is relative to the frame.
         if (_pivot != null && _pivot.parent != transform)
         {
-            _pivot.SetParent(transform, true); // keep world pose
+            _pivot.SetParent(transform, true);
         }
+
+        CapturePivotBaseLocalPosition();
         ResetClosed();
-        if (debugLog) Debug.Log($"[DoorController] OnEnable reset. isOpen={isOpen} pivot={_pivot?.name}");
+        if (debugLog) Debug.Log($"[DoorController] OnEnable reset. isOpen={_isOpen} pivot={_pivot?.name}");
     }
 
     void Update()
     {
-        float targetAngleY = isOpen ? openAngle : closeAngle;
-        Quaternion targetRotation = Quaternion.Euler(0, targetAngleY, 0);
         if (_pivot == null) _pivot = transform;
-        _pivot.localRotation = Quaternion.Slerp(_pivot.localRotation, targetRotation, Time.deltaTime * 5f);
+
+        float targetAngleY = _isOpen ? (closeAngle + _openSign * openAngle) : closeAngle;
+        _currentYaw = Mathf.MoveTowardsAngle(_currentYaw, targetAngleY, rotateSpeedDegPerSec * Time.deltaTime);
+        _pivot.localRotation = Quaternion.Euler(0f, _currentYaw, 0f);
     }
 
-    // 由 Interactable 呼叫
     public void TryOpen()
     {
-        Debug.Log($"[DoorController] TryOpen on {name}, isLocked={isLocked}, isOpen={isOpen}");
+        Debug.Log($"[DoorController] TryOpen on {name}, isLocked={isLocked}, isOpen={_isOpen}");
+
         if (isLocked)
         {
             var player = FindAnyObjectByType<PlayerInteraction>();
             if (player != null && player.HasKey())
             {
                 UnlockDoor();
-                isOpen = true; 
-                Debug.Log("[DoorController] 使用了鑰匙，門已解鎖並打開");
+                if (!_openSignChosen)
+                {
+                    _openSign = ChooseOpenSign();
+                    _openSignChosen = true;
+                }
+                _isOpen = true;
+                Debug.Log("[DoorController] Used a key. Door unlocked and opened.");
             }
             else
             {
-                Debug.Log("[DoorController] 需要鑰匙才能打開這扇門");
+                Debug.Log("[DoorController] Door is locked. A key is required.");
             }
+            return;
         }
-        else
+
+        // Choose direction once so repeated open/close does not flip or drift.
+        if (!_isOpen && !_openSignChosen)
         {
-            isOpen = !isOpen; 
+            _openSign = ChooseOpenSign();
+            _openSignChosen = true;
         }
+
+        _isOpen = !_isOpen;
+    }
+
+    private int ChooseOpenSign()
+    {
+        // Default heuristic: hinge side implies a preferred open direction (prevents opening into the frame for many prefabs).
+        int fallback = hingeOnLeft ? 1 : -1;
+
+        var pivot = _pivot != null ? _pivot : ResolvePivot();
+        if (pivot == null) return fallback;
+
+        var player = FindAnyObjectByType<PlayerInteraction>();
+        if (player == null) return fallback;
+
+        // Find a representative door leaf renderer under the pivot.
+        var leafRenderer = pivot.GetComponentsInChildren<Renderer>(true)
+            .FirstOrDefault(r => r != null && LooksLikeDoorLeaf(r.transform));
+        if (leafRenderer == null) return fallback;
+
+        // Evaluate both directions without mutating transforms (avoids quaternion drift/spin over repeated toggles).
+        Vector3 pivotLocalCenter = pivot.InverseTransformPoint(leafRenderer.bounds.center);
+        Vector3 playerPos = player.transform.position;
+
+        Vector3 centerPos = pivot.TransformPoint(Quaternion.Euler(0f, openAngle, 0f) * pivotLocalCenter);
+        Vector3 centerNeg = pivot.TransformPoint(Quaternion.Euler(0f, -openAngle, 0f) * pivotLocalCenter);
+
+        float distPos = (centerPos - playerPos).sqrMagnitude;
+        float distNeg = (centerNeg - playerPos).sqrMagnitude;
+
+        if (Mathf.Abs(distPos - distNeg) < 0.0001f) return fallback;
+        return distPos > distNeg ? 1 : -1;
     }
 
     public void UnlockDoor()
     {
         isLocked = false;
-        Debug.Log("[DoorController] 門已解鎖");
+        Debug.Log("[DoorController] Door unlocked.");
+    }
+
+    private Transform ResolvePivot()
+    {
+        if (hinge != null) return hinge;
+
+        foreach (var t in GetComponentsInChildren<Transform>(true))
+        {
+            if (t.name == "DoorHinge" || t.name == "Hinge" || t.name == "HingeSlot")
+                return t;
+        }
+
+        return transform;
+    }
+
+    private void EnsureOnlyDoorRotates()
+    {
+        if (_pivot == null || _pivot == transform) return;
+
+        // If the prefab authored the frame under the hinge, move it out so only the door leaf rotates.
+        var pivotChildren = new List<Transform>();
+        foreach (Transform c in _pivot) pivotChildren.Add(c);
+
+        foreach (var c in pivotChildren)
+        {
+            if (c == null) continue;
+            string n = c.name.ToLowerInvariant();
+
+            bool isDoor = LooksLikeDoorLeaf(c);
+            bool isDoorSlot = n.Contains("doorslot") || n == "door";
+            bool isFrameLike = n.Contains("frame") || (n.Contains("slot") && !n.Contains("door")) || n.Contains("trim");
+
+            if (isFrameLike && !isDoor && !isDoorSlot)
+            {
+                // Preserve world pose; we only want to move it out of the hinge hierarchy so it doesn't rotate.
+                c.SetParent(transform, true);
+            }
+        }
+
+        // Ensure the actual door leaf is under the pivot (keep world pose).
+        foreach (var t in GetComponentsInChildren<Transform>(true))
+        {
+            if (t == null) continue;
+            if (t == _pivot) continue;
+            if (t.IsChildOf(_pivot)) continue;
+            if (!LooksLikeDoorLeaf(t)) continue;
+
+            bool hasRenderable = t.GetComponentInChildren<Renderer>(true) != null || t.GetComponentInChildren<Collider>(true) != null;
+            if (!hasRenderable) continue;
+
+            t.SetParent(_pivot, true);
+        }
+    }
+
+    private bool LooksLikeDoorLeaf(Transform t)
+    {
+        if (t == null) return false;
+        string n = t.name.ToLowerInvariant();
+        if (!n.Contains("door")) return false;
+        if (n.Contains("frame")) return false;
+        if (n.Contains("slot")) return false;
+        return true;
     }
 
     private void ResetClosed()
     {
-        isOpen = false;
-        if (_pivot != null) _pivot.localRotation = Quaternion.Euler(0, closeAngle, 0);
-        if (_pivot != null)
+        _isOpen = false;
+        _currentYaw = closeAngle;
+        if (_pivot != null) _pivot.localRotation = Quaternion.Euler(0f, _currentYaw, 0f);
+
+        if (_pivot == null) return;
+        foreach (var t in _pivot.GetComponentsInChildren<Transform>(true))
         {
-            // Door leafs under pivot should start at identity so pivot rotation fully controls them.
-            foreach (var t in _pivot.GetComponentsInChildren<Transform>(true))
-            {
-                if (t == _pivot) continue;
-                string n = t.name.ToLower();
-                if (n.Contains("door")) t.localRotation = Quaternion.identity;
-            }
+            if (t == null) continue;
+            if (t == _pivot) continue;
+            if (LooksLikeDoorLeaf(t)) t.localRotation = Quaternion.identity;
         }
     }
 
@@ -127,12 +237,15 @@ public class DoorController : MonoBehaviour
         if (hingeLocalOffset != Vector3.zero) return;
         if (_pivot == null) return;
 
-        var renderers = _pivot.GetComponentsInChildren<Renderer>(true);
-        if (renderers == null || renderers.Length == 0) return;
+        var renderers = _pivot.GetComponentsInChildren<Renderer>(true)
+            .Where(r => r != null && LooksLikeDoorLeaf(r.transform))
+            .ToArray();
+        if (renderers.Length == 0) return;
 
         bool hasBounds = false;
         Vector3 worldMin = Vector3.zero;
         Vector3 worldMax = Vector3.zero;
+
         foreach (var r in renderers)
         {
             if (r == null) continue;
@@ -155,7 +268,8 @@ public class DoorController : MonoBehaviour
         float targetX = hingeOnLeft ? localMin.x : localMax.x;
 
         hingeLocalOffset = new Vector3(targetX, 0f, 0f);
-        if (debugLog) Debug.Log($"[DoorController] Auto-aligned hinge offset to {hingeLocalOffset} (side={(hingeOnLeft ? "Left" : "Right")}) on {name}");
+        if (debugLog)
+            Debug.Log($"[DoorController] Auto-aligned hinge offset to {hingeLocalOffset} on {name} (side={(hingeOnLeft ? "Left" : "Right")})");
     }
 
     private void ApplyPivotOffset()
@@ -163,14 +277,27 @@ public class DoorController : MonoBehaviour
         if (_pivot == null) return;
         if (hingeLocalOffset == Vector3.zero) return;
 
-        // Move the pivot while preserving child world positions.
-        var children = new System.Collections.Generic.List<Transform>();
+        var children = new List<Transform>();
         foreach (Transform t in _pivot) children.Add(t);
 
-        _pivot.localPosition += hingeLocalOffset;
+        // Move pivot to a stable base+offset position (avoid accumulating offsets on repeated rebuild/enable).
+        Vector3 oldWorld = _pivot.position;
+        _pivot.localPosition = _pivotBaseCaptured ? (_pivotBaseLocalPosition + hingeLocalOffset) : (_pivot.localPosition + hingeLocalOffset);
+        Vector3 newWorld = _pivot.position;
+        Vector3 worldDelta = newWorld - oldWorld;
         foreach (var child in children)
         {
-            child.position -= _pivot.TransformVector(hingeLocalOffset);
+            if (child == null) continue;
+            child.position -= worldDelta;
         }
+    }
+
+    private void CapturePivotBaseLocalPosition()
+    {
+        if (_pivot == null) return;
+        if (_pivot.parent == null) return;
+        // Treat the currently-authored pivot pose as "base", even if an offset was already applied earlier.
+        _pivotBaseLocalPosition = _pivot.localPosition - hingeLocalOffset;
+        _pivotBaseCaptured = true;
     }
 }

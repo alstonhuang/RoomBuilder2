@@ -167,7 +167,7 @@ namespace MyGame.Adapters.Unity
                     rotation = new SimpleVector3(0, 90, 0)
                 });
 
-                int removedWall = RemoveWallSegments(room.blueprint, doorPosX, doorPosZ, halfX, halfZ);
+                int removedWall = RemoveWallSegments(room.blueprint, doorPosX, doorPosZ, halfX, halfZ, 90f);
                 Debug.Log($"Single-room door added to {room.name}, wall removed={removedWall}");
 
                 // Drop a key in the single room so the player can open the door.
@@ -199,8 +199,8 @@ namespace MyGame.Adapters.Unity
                     rotation = new SimpleVector3(0, 90, 0) // Rotate to face along the X-axis
                 });
                 // Remove one wall segment on both sides where the door sits
-                int removedA = RemoveWallSegments(roomA.blueprint, doorPosX, doorPosZ, halfX, halfZ);
-                int removedB = RemoveWallSegments(roomB.blueprint, -doorPosX, doorPosZ, halfX, halfZ);
+                int removedA = RemoveWallSegments(roomA.blueprint, doorPosX, doorPosZ, halfX, halfZ, 90f);
+                int removedB = RemoveWallSegments(roomB.blueprint, -doorPosX, doorPosZ, halfX, halfZ, 90f);
                 Debug.Log($"Door carve result A={removedA}, B={removedB} at z={doorPosZ}");
 
                 // Add a Key to the room where the door is placed (Room A)
@@ -215,15 +215,19 @@ namespace MyGame.Adapters.Unity
             }
         }
 
-        private int RemoveWallSegments(RoomBlueprint bp, float targetX, float targetZ, float halfWidth, float halfDepth)
+        private int RemoveWallSegments(RoomBlueprint bp, float targetX, float targetZ, float halfWidth, float halfDepth, float rotationYDeg)
         {
             int removed = 0;
+            bool swapXZ = Mathf.Abs(Mathf.DeltaAngle(rotationYDeg, 90f)) < 1f || Mathf.Abs(Mathf.DeltaAngle(rotationYDeg, 270f)) < 1f;
+            float halfX = swapXZ ? halfDepth : halfWidth;
+            float halfZ = swapXZ ? halfWidth : halfDepth;
+
             for (int i = bp.nodes.Count - 1; i >= 0; i--)
             {
                 var n = bp.nodes[i];
                 if (n.itemID == null || !n.itemID.Contains("Wall")) continue;
-                if (Mathf.Abs(n.position.x - targetX) > halfWidth) continue;
-                if (Mathf.Abs(n.position.z - targetZ) > halfDepth) continue;
+                if (Mathf.Abs(n.position.x - targetX) > halfX) continue;
+                if (Mathf.Abs(n.position.z - targetZ) > halfZ) continue;
                 bp.nodes.RemoveAt(i);
                 removed++;
             }
@@ -239,11 +243,11 @@ namespace MyGame.Adapters.Unity
             ItemDefinition def = db.Find(d => d != null && (d.itemID == "DoorSystem" || d.itemID.ToLower().Contains("door")));
             if (def == null) return Vector3.one;
 
-            if (def.prefab != null && TryGetPrefabBounds(def.prefab, out var b))
-            {
-                return b.size;
-            }
-            return def.logicalSize;
+            // Prefer logical size so carving stays correct even when art/prefab bounds are missing or inconsistent.
+            if (def.logicalSize != Vector3.zero) return def.logicalSize;
+
+            if (def.prefab != null && TryGetPrefabBounds(def.prefab, out var b)) return b.size;
+            return Vector3.one;
         }
 
         private bool TryGetPrefabBounds(GameObject prefab, out Bounds bounds)

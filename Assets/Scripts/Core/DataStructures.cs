@@ -68,6 +68,7 @@ namespace MyGame.Core
         public string instanceID;
         public ContainerKind kind;
         public SimpleBounds bounds;
+        public SimpleVector3 rotation;
         public Facing facing;
         public string parentID;
         public string itemID; // optional: desired asset
@@ -89,7 +90,7 @@ namespace MyGame.Core
                 itemID = itemID,
                 parentID = parent,
                 position = bounds.center,
-                rotation = SimpleVector3.Zero,
+                rotation = rotation,
                 containerKind = kind,
                 logicalBounds = bounds,
                 facing = facing

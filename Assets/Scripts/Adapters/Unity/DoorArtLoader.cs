@@ -7,6 +7,13 @@ namespace MyGame.Adapters.Unity
     /// </summary>
     public class DoorArtLoader : MonoBehaviour
     {
+        private const string FrameContentName = "__FrameContent";
+        private const string DefaultFrameName = "Frame";
+        private const string DefaultDoorSlotName = "DoorSlot";
+        private const string DefaultTopSlotName = "TopSlot";
+        private const string DefaultLeftSlotName = "LeftSlot";
+        private const string DefaultRightSlotName = "RightSlot";
+
         [Header("Slots")]
         public Transform frameSlot;
         public Transform topSlot;
@@ -47,22 +54,54 @@ namespace MyGame.Adapters.Unity
         [ContextMenu("Rebuild Art")]
         public void RebuildArt()
         {
-            BuildFrameIfProvided();
+            EnsureSlotRefs();
+
+            // Reset door slot before alignment so repeated rebuilds don't drift.
+            if (doorSlot != null) doorSlot.localPosition = Vector3.zero;
+
+            var frameContent = GetOrCreateChild(frameSlot, FrameContentName);
+            BuildFrameIfProvided(frameContent);
 
             // Decide which prefabs to use for trims
             var top = useSharedTrimPrefab && trimPrefab ? trimPrefab : topPrefab;
             var left = useSharedTrimPrefab && trimPrefab ? trimPrefab : leftPrefab;
             var right = useSharedTrimPrefab && trimPrefab ? trimPrefab : rightPrefab;
 
-            SetSlotScale(topSlot, topSize);
+            // Compute a top span that covers the door + both side trims.
+            var computedTopSize = new Vector3(doorSize.x + sideSize.x * 2f, topSize.y, topSize.z);
+
+            // Place trims around the opening using a bottom-at-0 convention.
+            // Frame height is driven by sideSize.y (opening height), while doorSize.y is the leaf height.
+            float openingH = Mathf.Max(0.01f, sideSize.y);
+            float openingHalfH = openingH * 0.5f;
+            float doorHalfH = doorSize.y * 0.5f;
+            // Position hinge pivot at the door edge so the leaf can be centered in the opening when closed.
+            var hinge = ResolveHinge();
+            bool hingeLeft = true;
+            var ctrl = GetComponent<DoorController>();
+            if (ctrl != null) hingeLeft = ctrl.hingeOnLeft;
+            float hingeX = hingeLeft ? -(doorSize.x * 0.5f) : (doorSize.x * 0.5f);
+            if (hinge != null) hinge.localPosition = new Vector3(hingeX, 0f, 0f);
+
+            if (doorSlot != null)
+            {
+                // Keep the door leaf centered in the opening.
+                float slotX = hinge != null ? -hinge.localPosition.x : 0f;
+                doorSlot.localPosition = new Vector3(slotX, doorHalfH, 0f);
+            }
+            if (leftSlot != null) leftSlot.localPosition = new Vector3(-(doorSize.x * 0.5f + sideSize.x * 0.5f), openingHalfH, 0f);
+            if (rightSlot != null) rightSlot.localPosition = new Vector3(doorSize.x * 0.5f + sideSize.x * 0.5f, openingHalfH, 0f);
+            if (topSlot != null) topSlot.localPosition = new Vector3(0f, openingH - computedTopSize.y * 0.5f, 0f);
+
+            SetSlotScale(topSlot, computedTopSize);
             SetSlotScale(leftSlot, sideSize);
             SetSlotScale(rightSlot, sideSize);
             SetSlotScale(doorSlot, doorSize);
 
-            BuildSlot(topSlot, top, topSize, Vector3.zero, Vector3.one);
-            BuildSlot(leftSlot, left, sideSize, Vector3.zero, Vector3.one);
-            BuildSlot(rightSlot, right, sideSize, Vector3.zero, Vector3.one);
-            BuildSlot(doorSlot, doorPrefab, doorSize, doorOffset, doorScale);
+            BuildSlot(topSlot, top, Vector3.one, Vector3.zero, Vector3.one);
+            BuildSlot(leftSlot, left, Vector3.one, Vector3.zero, Vector3.one);
+            BuildSlot(rightSlot, right, Vector3.one, Vector3.zero, Vector3.one);
+            BuildSlot(doorSlot, doorPrefab, Vector3.one, doorOffset, doorScale);
 
             if (alignDoorToFrame)
             {
@@ -78,24 +117,14 @@ namespace MyGame.Adapters.Unity
             }
         }
 
-        private bool BuildFrameIfProvided()
+        private bool BuildFrameIfProvided(Transform frameContentSlot)
         {
-            if (frameSlot == null) return false;
-            ClearChildren(frameSlot);
+            if (frameContentSlot == null) return false;
+            ClearChildren(frameContentSlot);
 
             if (framePrefab != null)
             {
-                var instance = Instantiate(framePrefab, frameSlot);
-                ResetLocal(instance.transform);
-                ApplyOffsetAndScale(instance.transform, frameOffset, frameScale);
-                return true;
-            }
-
-            if (createFallbackPrimitives)
-            {
-                var instance = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                instance.transform.SetParent(frameSlot, false);
-                instance.transform.localScale = new Vector3(1f, 2f, 0.2f);
+                var instance = Instantiate(framePrefab, frameContentSlot);
                 ResetLocal(instance.transform);
                 ApplyOffsetAndScale(instance.transform, frameOffset, frameScale);
                 return true;
@@ -119,14 +148,105 @@ namespace MyGame.Adapters.Unity
             {
                 instance = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 instance.transform.SetParent(slot, false);
-                instance.transform.localScale = fallbackScale;
+                ResetLocal(instance.transform);
+                instance.transform.localScale = Vector3.one;
             }
 
             if (instance != null)
             {
-                ResetLocal(instance.transform);
+                // Help DoorController identify what is the door leaf even when using fallbacks.
+                if (slot == doorSlot) instance.name = "DoorLeaf";
+                else if (slot == topSlot) instance.name = "FrameTop";
+                else if (slot == leftSlot) instance.name = "FrameLeft";
+                else if (slot == rightSlot) instance.name = "FrameRight";
+
+                // The leaf prefab might itself contain interaction/door scripts. When nested under a DoorSystem,
+                // the DoorController on the DoorSystem should be the single authority to prevent double-rotation.
+                if (slot == doorSlot)
+                {
+                    StripLeafControlComponents(instance);
+                }
+
                 ApplyOffsetAndScale(instance.transform, offset, scaleMult);
             }
+        }
+
+        private void StripLeafControlComponents(GameObject leaf)
+        {
+            if (leaf == null) return;
+
+            var door = leaf.GetComponent<DoorController>();
+            if (door != null)
+            {
+                if (Application.isPlaying) Destroy(door);
+                else DestroyImmediate(door);
+            }
+
+            var interactable = leaf.GetComponent<Interactable>();
+            if (interactable != null)
+            {
+                if (Application.isPlaying) Destroy(interactable);
+                else DestroyImmediate(interactable);
+            }
+        }
+
+        private void EnsureSlotRefs()
+        {
+            if (frameSlot == null) frameSlot = FindDeepChild(transform, DefaultFrameName);
+            if (doorSlot == null) doorSlot = FindDeepChild(transform, DefaultDoorSlotName);
+
+            // Create trim slots if missing (keep them under frameSlot so they're not part of the door hinge pivot).
+            var trimsParent = frameSlot != null ? frameSlot : transform;
+
+            if (topSlot == null) topSlot = GetOrCreateChild(trimsParent, DefaultTopSlotName);
+            if (leftSlot == null) leftSlot = GetOrCreateChild(trimsParent, DefaultLeftSlotName);
+            if (rightSlot == null) rightSlot = GetOrCreateChild(trimsParent, DefaultRightSlotName);
+
+            // Move any legacy authored frame mesh under a dedicated content slot so we can safely clear/rebuild it.
+            if (frameSlot != null)
+            {
+                var frameContent = GetOrCreateChild(frameSlot, FrameContentName);
+                var toMove = new System.Collections.Generic.List<Transform>();
+                foreach (Transform c in frameSlot)
+                {
+                    if (c == null) continue;
+                    if (c == frameContent) continue;
+                    if (c == topSlot || c == leftSlot || c == rightSlot) continue;
+                    toMove.Add(c);
+                }
+                foreach (var c in toMove)
+                {
+                    c.SetParent(frameContent, true);
+                }
+            }
+        }
+
+        private static Transform GetOrCreateChild(Transform parent, string childName)
+        {
+            if (parent == null) return null;
+            var t = parent.Find(childName);
+            if (t != null) return t;
+            var go = new GameObject(childName);
+            go.transform.SetParent(parent, false);
+            return go.transform;
+        }
+
+        private static Transform FindDeepChild(Transform root, string name)
+        {
+            if (root == null) return null;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (t != null && t.name == name) return t;
+            }
+            return null;
+        }
+
+        private Transform ResolveHinge()
+        {
+            var ctrl = GetComponent<DoorController>();
+            if (ctrl != null && ctrl.hinge != null) return ctrl.hinge;
+            if (doorSlot != null && doorSlot.parent != null) return doorSlot.parent;
+            return FindDeepChild(transform, "HingeSlot") ?? FindDeepChild(transform, "DoorHinge") ?? FindDeepChild(transform, "Hinge");
         }
 
         private void ClearChildren(Transform slot)
@@ -183,7 +303,7 @@ namespace MyGame.Adapters.Unity
 
             adjust.x = hingeLeft ? (fb.min.x - db.min.x + doorInsetX) : (fb.max.x - db.max.x - doorInsetX);
 
-            doorSlot.localPosition += adjust;
+            doorSlot.position += adjust;
 
             if (scaleDoorToFrame)
             {
@@ -200,7 +320,7 @@ namespace MyGame.Adapters.Unity
                     adjust.y = fb.min.y - db.min.y;
                     adjust.z = fb.center.z - db.center.z;
                     adjust.x = hingeLeft ? (fb.min.x - db.min.x + doorInsetX) : (fb.max.x - db.max.x - doorInsetX);
-                    doorSlot.localPosition += adjust;
+                    doorSlot.position += adjust;
                 }
             }
         }

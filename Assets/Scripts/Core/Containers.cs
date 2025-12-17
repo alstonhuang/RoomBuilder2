@@ -30,6 +30,11 @@ namespace MyGame.Core
             var resultList = new List<PropNode>();
             string myInstanceID = $"{_itemID}_{Guid.NewGuid().ToString().Substring(0, 4)}";
 
+            // Use the real item size for the item node (not the allocated region size),
+            // otherwise runtime will scale furniture to fill the whole region and appear huge/floating.
+            SimpleVector3 itemSize = _library != null ? _library.GetItemSize(_itemID) : new SimpleVector3(0, 0, 0);
+            if (itemSize.x <= 0 || itemSize.y <= 0 || itemSize.z <= 0) itemSize = new SimpleVector3(1, 1, 1);
+
             // 2. 生成自己
             resultList.Add(new PropNode
             {
@@ -39,7 +44,7 @@ namespace MyGame.Core
                 position = bounds.center,
                 rotation = SimpleVector3.Zero,
                 containerKind = ContainerKind.Unknown,
-                logicalBounds = bounds
+                logicalBounds = new SimpleBounds(bounds.center, itemSize)
             });
 
             // 3. 連鎖反應 (生成子物件)
@@ -91,7 +96,8 @@ namespace MyGame.Core
                                 position = rule.offset,
                                 rotation = SimpleVector3.Zero,
                                 containerKind = ContainerKind.Unknown,
-                                logicalBounds = bounds
+                                // Fixed-placement children use local offsets; leave bounds empty so the builder treats position as local.
+                                logicalBounds = default
                             });
                             break;
                     }

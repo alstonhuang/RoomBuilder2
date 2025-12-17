@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System;
 
 namespace MyGame.Core
 {
@@ -48,6 +49,7 @@ namespace MyGame.Core
                 instanceID = "Region_Room",
                 kind = ContainerKind.Region,
                 bounds = roomBounds,
+                rotation = SimpleVector3.Zero,
                 facing = Facing.None,
                 parentID = null
             };
@@ -57,6 +59,7 @@ namespace MyGame.Core
                 instanceID = "Group_Floor",
                 kind = ContainerKind.Region,
                 bounds = roomBounds,
+                rotation = SimpleVector3.Zero,
                 parentID = region.instanceID
             };
             floorGroup.children.AddRange(floorNodes.Select(ToContainerNode));
@@ -66,6 +69,7 @@ namespace MyGame.Core
                 instanceID = "Group_Wall",
                 kind = ContainerKind.Region,
                 bounds = roomBounds,
+                rotation = SimpleVector3.Zero,
                 parentID = region.instanceID
             };
             wallGroup.children.AddRange(wallNodes.Select(ToContainerNode));
@@ -75,18 +79,72 @@ namespace MyGame.Core
                 instanceID = "Group_Furniture",
                 kind = ContainerKind.Region,
                 bounds = roomBounds,
+                rotation = SimpleVector3.Zero,
                 parentID = region.instanceID
             };
-            furnitureGroup.children.AddRange(furnitureNodes.Select(ToContainerNode));
+            furnitureGroup.children.AddRange(BuildTreeFromParentIds(furnitureNodes));
 
             region.children.Add(floorGroup);
             region.children.Add(wallGroup);
             region.children.Add(furnitureGroup);
 
             bp.containers.Add(region);
-            bp.nodes = region.FlattenToPropNodes().ToList();
+
+            // Important: Keep the original PropNodes list for runtime building.
+            // Some placement strategies (e.g., RandomScatterStrategy) emit child positions as LOCAL offsets from the parent.
+            // Flattening into ContainerNodes would lose that semantic and break nesting (cups end up far from tables, etc.).
+            bp.nodes = new List<PropNode>();
+            bp.nodes.AddRange(floorNodes);
+            bp.nodes.AddRange(wallNodes);
+            bp.nodes.AddRange(furnitureNodes);
 
             return bp;
+        }
+
+        private List<ContainerNode> BuildTreeFromParentIds(List<PropNode> nodes)
+        {
+            if (nodes == null || nodes.Count == 0) return new List<ContainerNode>();
+
+            // Build nodes map first (stable even if input is out of order).
+            var map = new Dictionary<string, ContainerNode>();
+            foreach (var n in nodes)
+            {
+                if (n == null) continue;
+                if (string.IsNullOrEmpty(n.instanceID)) continue;
+                if (!map.ContainsKey(n.instanceID))
+                {
+                    map[n.instanceID] = ToContainerNode(n);
+                }
+            }
+
+            // Attach children by original parentID.
+            foreach (var n in nodes)
+            {
+                if (n == null) continue;
+                if (string.IsNullOrEmpty(n.instanceID)) continue;
+                if (!map.TryGetValue(n.instanceID, out var child)) continue;
+
+                if (!string.IsNullOrEmpty(n.parentID) && map.TryGetValue(n.parentID, out var parent))
+                {
+                    parent.children.Add(child);
+                }
+            }
+
+            // Roots are those whose parent isn't in the same set.
+            var roots = new List<ContainerNode>();
+            foreach (var n in nodes)
+            {
+                if (n == null) continue;
+                if (string.IsNullOrEmpty(n.instanceID)) continue;
+                if (!map.TryGetValue(n.instanceID, out var node)) continue;
+
+                if (string.IsNullOrEmpty(n.parentID) || !map.ContainsKey(n.parentID))
+                {
+                    roots.Add(node);
+                }
+            }
+
+            return roots;
         }
 
         private IContainer CreateAutoSplitLayout(List<string> items)
@@ -127,6 +185,7 @@ namespace MyGame.Core
                 itemID = n.itemID,
                 parentID = n.parentID,
                 bounds = new SimpleBounds(center, size),
+                rotation = n.rotation,
                 kind = n.containerKind,
                 facing = n.facing,
                 relations = n.relations ?? new List<ContainerRelation>(),

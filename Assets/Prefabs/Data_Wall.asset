@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Data_Wall
   m_EditorClassIdentifier: 
   itemID: Wall
-  prefab: {fileID: 9027840664315639774, guid: 9e7739b9fd6c0624085c40b88e4f72d9, type: 3}
+  prefab: {fileID: 1230887261166401492, guid: ba1909298d3a6f3498625a705db3c450, type: 3}
   categoryTag: 
-  logicalSize: {x: 1, y: 1, z: 1}
-  minBounds: {x: 1, y: 1, z: 1}
+  logicalSize: {x: 1, y: 3, z: 0.2}
+  minBounds: {x: 1, y: 3, z: 0.2}
   rules: []

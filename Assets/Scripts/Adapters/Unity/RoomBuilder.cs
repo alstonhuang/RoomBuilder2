@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Linq; // ?? ?啣???嚗鈭 ToList() 摰?芷
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using MyGame.Core;
 using ILogger = MyGame.Core.ILogger;
@@ -11,79 +11,74 @@ namespace MyGame.Adapters.Unity
     {
         public List<ItemDefinition> database;
         public List<RoomTheme> themeDatabase;
-        
-        [Header("??閮剖?")]
+
+        [Header("Room Settings")]
         public string themeToBuild = "LivingRoom";
-        public Vector3 roomSize = new Vector3(10, 2, 10); // 擃漲閮剔 2 瘥?摰寞???璆?
+        public Vector3 roomSize = new Vector3(10, 2, 10);
 
         public RoomBlueprint blueprint;
 
-        // Flags for controlling wall generation based on neighboring rooms
-        private bool m_SkipNorthWallGeneration = false; // +Z side
-        private bool m_SkipSouthWallGeneration = false; // -Z side
-        private bool m_SkipEastWallGeneration = false;  // +X side
-        private bool m_SkipWestWallGeneration = false;  // -X side
+        private bool m_SkipNorthWallGeneration; // +Z
+        private bool m_SkipSouthWallGeneration; // -Z
+        private bool m_SkipEastWallGeneration;  // +X
+        private bool m_SkipWestWallGeneration;  // -X
 
-        private Vector3? cachedWallSize;
+        private Vector3? m_CachedWallSize;
+        private readonly HashSet<string> m_PhysicalInstanceIds = new HashSet<string>();
 
-        /// <summary>
-        /// Sets flags to skip wall generation on specific sides.
-        /// </summary>
-        /// <param name="skipNorth">True to skip wall generation on the +Z (North) side.</param>
-        /// <param name="skipSouth">True to skip wall generation on the -Z (South) side.</param>
-        /// <param name="skipEast">True to skip wall generation on the +X (East) side.</param>
-        /// <param name="skipWest">True to skip wall generation on the -X (West) side.</param>
         public void SetWallGenerationFlags(bool skipNorth, bool skipSouth, bool skipEast, bool skipWest)
         {
             m_SkipNorthWallGeneration = skipNorth;
             m_SkipSouthWallGeneration = skipSouth;
             m_SkipEastWallGeneration = skipEast;
             m_SkipWestWallGeneration = skipWest;
-            Debug.Log($"[{name}] Wall generation flags set: North={m_SkipNorthWallGeneration}, South={m_SkipSouthWallGeneration}, East={m_SkipEastWallGeneration}, West={m_SkipWestWallGeneration}");
+
+            Debug.Log(
+                $"[{name}] Wall generation flags set: North={m_SkipNorthWallGeneration}, South={m_SkipSouthWallGeneration}, East={m_SkipEastWallGeneration}, West={m_SkipWestWallGeneration}");
         }
 
-        // ==========================================
-        // 1. ?啣?皜?
-        // ==========================================
         [ContextMenu("Clear All")]
         public void Clear()
         {
-            // 雿輻 ToList() 頧?皜??歹??踹??刻艘?葉靽格??撠?航炊
             var children = transform.Cast<Transform>().ToList();
             foreach (var child in children)
             {
-                // ?函楊頛舀芋撘?敹???DestroyImmediate
                 if (Application.isPlaying) Destroy(child.gameObject);
                 else DestroyImmediate(child.gameObject);
             }
-            Debug.Log("[RoomBuilder] 撌脫??斗??????拐辣??); 
+
+            Debug.Log("[RoomBuilder] Cleared spawned objects");
         }
 
-        [ContextMenu("Generate Blueprint")] 
+        [ContextMenu("Generate Blueprint")]
         public void GenerateBlueprint()
         {
             Debug.Log($"[{name}] Generating blueprint...");
-            // If an imported package generator is present on the same GameObject, use it
-            // and map its blueprint into the Core blueprint. Otherwise use the Core generator.
+
             var importedGen = GetComponent<ImportedCore.RoomGenerator>();
             if (importedGen != null)
             {
                 var importedBp = importedGen.GenerateStackDemo();
                 blueprint = MyGame.Adapters.Imported.ImportedCoreMapper.ToCore(importedBp);
+                Debug.Log($"[{name}] Blueprint generated (imported) with {blueprint.nodes?.Count ?? 0} nodes.");
+                return;
             }
-            else
-            {
-                ILogger logger = new LoggerAdapter();
-                IItemLibrary library = new ItemLibraryAdapter(database, themeDatabase);
-                RoomGenerator generator = new RoomGenerator(logger, library);
 
-                var coreCenter = new SimpleVector3(0, roomSize.y / 2, 0);
-                var bounds = new SimpleBounds(coreCenter, new SimpleVector3(roomSize.x, roomSize.y, roomSize.z));
+            ILogger logger = new LoggerAdapter();
+            IItemLibrary library = new ItemLibraryAdapter(database, themeDatabase);
+            RoomGenerator generator = new RoomGenerator(logger, library);
 
-                blueprint = generator.GenerateFromTheme(bounds, themeToBuild,
-                                                        m_SkipNorthWallGeneration, m_SkipSouthWallGeneration,
-                                                        m_SkipEastWallGeneration, m_SkipWestWallGeneration);
-            }
+            var coreCenter = new SimpleVector3(0, roomSize.y / 2f, 0);
+            var bounds = new SimpleBounds(coreCenter, new SimpleVector3(roomSize.x, roomSize.y, roomSize.z));
+
+            blueprint = generator.GenerateFromTheme(
+                bounds,
+                themeToBuild,
+                m_SkipNorthWallGeneration,
+                m_SkipSouthWallGeneration,
+                m_SkipEastWallGeneration,
+                m_SkipWestWallGeneration);
+
             Debug.Log($"[{name}] Blueprint generated with {blueprint.nodes.Count} nodes.");
         }
 
@@ -91,22 +86,22 @@ namespace MyGame.Adapters.Unity
         public void BuildFromGeneratedBlueprint()
         {
             Debug.Log($"[{name}] Building from generated blueprint...");
+
             if (blueprint == null)
             {
                 Debug.LogError($"[{name}] Blueprint is not generated yet. Please call GenerateBlueprint() first.");
                 return;
-            } 
+            }
 
             Clear();
+
             var spawnedMap = BuildFromBlueprint(blueprint);
             ApplyPhysicsSnapping(spawnedMap, blueprint);
 
-            // Add a trigger collider to the room
             var collider = gameObject.AddComponent<BoxCollider>();
             collider.size = roomSize;
             collider.isTrigger = true;
 
-            // Add the RoomTrigger component
             gameObject.AddComponent<RoomTrigger>();
             Debug.Log($"[{name}] Finished building.");
         }
@@ -120,243 +115,688 @@ namespace MyGame.Adapters.Unity
 
         public Dictionary<string, Transform> BuildFromBlueprint(RoomBlueprint bp)
         {
-            if (bp.containers != null && bp.containers.Count > 0)
-            {
-                bp.nodes = bp.containers[0].FlattenToPropNodes().ToList();
-                Debug.Log($"[{name}] Using container tree, flattened {bp.nodes.Count} nodes.");
-            }
+            EnsureNodes(bp);
 
             Debug.Log($"[{name}] BuildFromBlueprint processing {bp.nodes.Count} nodes.");
+
             var spawned = new Dictionary<string, Transform>();
-            var defMap = new Dictionary<string, ItemDefinition>();
-            cachedWallSize = null;
-            foreach (var d in database) defMap[d.itemID] = d;
+            var defMap = BuildDefinitionMap();
+            m_CachedWallSize = null;
+            m_PhysicalInstanceIds.Clear();
 
-            int wallCountBefore = bp.nodes.FindAll(n => n.itemID != null && n.itemID.Contains("Wall")).Count;
-            int doorCount = bp.nodes.FindAll(n => n.itemID != null && n.itemID.ToLower().Contains("door")).Count;
+            PostProcessDoorWallOverlaps(bp, defMap);
 
-            BlueprintPostProcessor.RemoveDoorWallOverlaps(bp, id =>
-            {
-                if (defMap.TryGetValue(id, out var def))
-                {
-                    // Prefer logical size (so DoorSystem can describe its intended opening), fall back to prefab bounds.
-                    var s = def.logicalSize;
-                    if (s.x > 0 && s.y > 0 && s.z > 0)
-                        return new SimpleVector3(s.x, s.y, s.z);
-
-                    if (def.prefab != null && TryGetBounds(def.prefab, out var b))
-                        return new SimpleVector3(b.size.x, b.size.y, b.size.z);
-                }
-                return SimpleVector3.Zero;
-            });
-
-            int wallCountAfter = bp.nodes.FindAll(n => n.itemID != null && n.itemID.Contains("Wall")).Count;
-            int removed = wallCountBefore - wallCountAfter;
-            if (doorCount > 0)
-            {
-                Debug.Log($"[{name}] PostProcess RemoveDoorWallOverlaps: doors={doorCount}, wallsBefore={wallCountBefore}, wallsAfter={wallCountAfter}, removed={removed}.");
-            }
-
-            int spawnedCount = 0;
+            // Pass 1: create objects (prefabs or placeholders) so parenting order doesn't matter.
             foreach (var node in bp.nodes)
             {
-                if (!defMap.ContainsKey(node.itemID))
+                if (node == null) continue;
+                if (string.IsNullOrWhiteSpace(node.instanceID))
                 {
-                    Debug.LogWarning($"[{name}] ItemID '{node.itemID}' not found in database. Skipping.");
-                    continue;
-                }
-                GameObject prefab = defMap[node.itemID].prefab;
-                if (prefab == null)
-                {
-                    Debug.LogWarning($"[{name}] Prefab for ItemID '{node.itemID}' is null. Skipping.");
+                    Debug.LogWarning($"[{name}] Node has empty instanceID; skipping.");
                     continue;
                 }
 
-                GameObject go = Instantiate(prefab);
-                go.name = node.instanceID;
-                
-                Vector3 pos = new Vector3(node.position.x, node.position.y, node.position.z);
-                Quaternion rot = Quaternion.Euler(node.rotation.x, node.rotation.y, node.rotation.z);
+                var go = CreateNodeObject(node, defMap, out bool isPhysical);
+                spawned[node.instanceID] = go.transform;
+                if (isPhysical) m_PhysicalInstanceIds.Add(node.instanceID);
+            }
 
-                ApplyContainerSizing(go.transform, node);
+            // Pass 2: hierarchy + transforms.
+            foreach (var node in bp.nodes)
+            {
+                if (node == null) continue;
+                if (string.IsNullOrWhiteSpace(node.instanceID)) continue;
+                if (!spawned.TryGetValue(node.instanceID, out var t)) continue;
 
-                // DoorSystem runtime adjust to avoid prefab scale layering issues
-                if (node.itemID.Equals("DoorSystem"))
+                Transform parent = transform;
+                if (!string.IsNullOrEmpty(node.parentID) && spawned.TryGetValue(node.parentID, out var parentT) && parentT != null)
+                {
+                    // Parent under a scale-isolating anchor so container scaling doesn't blow up child transforms.
+                    parent = GetContentAnchor(parentT);
+                }
+
+                var pos = new Vector3(node.position.x, node.position.y, node.position.z);
+                var rot = Quaternion.Euler(node.rotation.x, node.rotation.y, node.rotation.z);
+
+                // Blueprint positions are expressed in the parent's local space (container coordinates).
+                t.SetParent(parent, false);
+                t.localPosition = pos;
+                t.localRotation = rot;
+
+                if (!string.IsNullOrEmpty(node.itemID) && node.itemID == "DoorSystem")
                 {
                     float logicalWidth = 1f;
-                    if (defMap.TryGetValue(node.itemID, out var def) && def.logicalSize.x > 0)
+                    if (defMap.TryGetValue(node.itemID, out var def) && def != null && def.logicalSize.x > 0)
                         logicalWidth = def.logicalSize.x;
-                    ConfigureDoorSystem(go.transform, GetWallSize(defMap), roomSize, logicalWidth);
-                }
 
-                if (!string.IsNullOrEmpty(node.parentID) && spawned.ContainsKey(node.parentID))
-                {
-                    go.transform.SetParent(spawned[node.parentID]);
-                    go.transform.localPosition = pos;
-                    go.transform.localRotation = rot;
+                    ConfigureDoorSystem(t, GetWallSize(defMap), roomSize, logicalWidth);
                 }
-                else
-                {
-                    go.transform.SetParent(transform);
-                    go.transform.position = pos + transform.position;
-                    go.transform.localRotation = rot;
-                }
-
-                // Align/scale door to match wall height/thickness and sit on floor.
-                if (node.itemID.ToLower().Contains("door"))
-                {
-                    AlignDoorToFloor(go.transform, GetWallSize(defMap));
-                }
-
-                spawned[node.instanceID] = go.transform;
-                spawnedCount++;
             }
-            Debug.Log($"[{name}] Spawned {spawnedCount} objects.");
+
+            Debug.Log($"[{name}] Spawned {spawned.Count} objects.");
             return spawned;
         }
 
-        private void ApplyContainerSizing(Transform target, Core.PropNode node)
+        private static Transform GetContentAnchor(Transform parent)
         {
-            if (target == null) return;
+            if (parent == null) return null;
 
-            bool shouldFit = node.containerKind == Core.ContainerKind.Wall
-                             || node.containerKind == Core.ContainerKind.Floor
-                             || node.containerKind == Core.ContainerKind.Ceiling
-                             || node.containerKind == Core.ContainerKind.Door
-                             || node.containerKind == Core.ContainerKind.Window;
-            var size = node.logicalBounds.size;
-            if (!shouldFit || size.x <= 0 || size.y <= 0 || size.z <= 0) return;
+            const string AnchorName = "__Content";
+            var anchor = parent.Find(AnchorName);
+            if (anchor == null)
+            {
+                var go = new GameObject(AnchorName);
+                anchor = go.transform;
+                anchor.SetParent(parent, false);
+            }
+
+            anchor.localPosition = Vector3.zero;
+            anchor.localRotation = Quaternion.identity;
+            anchor.localScale = InverseScale(parent.localScale);
+            return anchor;
+        }
+
+        private static Vector3 InverseScale(Vector3 scale)
+        {
+            float ix = Mathf.Abs(scale.x) > 0.00001f ? 1f / scale.x : 1f;
+            float iy = Mathf.Abs(scale.y) > 0.00001f ? 1f / scale.y : 1f;
+            float iz = Mathf.Abs(scale.z) > 0.00001f ? 1f / scale.z : 1f;
+            return new Vector3(ix, iy, iz);
+        }
+
+        private void EnsureNodes(RoomBlueprint bp)
+        {
+            if (bp == null) return;
+            if (bp.nodes != null && bp.nodes.Count > 0) return;
+            if (bp.containers == null || bp.containers.Count == 0) return;
+
+            bp.nodes = bp.containers[0].FlattenToPropNodes().ToList();
+            Debug.Log($"[{name}] Blueprint nodes were empty; flattened container tree to {bp.nodes.Count} nodes.");
+        }
+
+        private Dictionary<string, ItemDefinition> BuildDefinitionMap()
+        {
+            var defMap = new Dictionary<string, ItemDefinition>();
+            if (database == null) return defMap;
+
+            foreach (var d in database)
+            {
+                if (d == null) continue;
+                if (string.IsNullOrEmpty(d.itemID)) continue;
+                defMap[d.itemID] = d;
+            }
+
+            return defMap;
+        }
+
+        private void PostProcessDoorWallOverlaps(RoomBlueprint bp, Dictionary<string, ItemDefinition> defMap)
+        {
+            if (bp?.nodes == null) return;
+
+            int wallCountBefore = bp.nodes.Count(n => n?.itemID != null && n.itemID.Contains("Wall"));
+            int doorCount = bp.nodes.Count(n => n?.itemID != null && n.itemID.ToLower().Contains("door"));
+
+            BlueprintPostProcessor.RemoveDoorWallOverlaps(bp, id =>
+            {
+                if (string.IsNullOrEmpty(id)) return SimpleVector3.Zero;
+                if (!defMap.TryGetValue(id, out var def) || def == null) return SimpleVector3.Zero;
+
+                var s = def.logicalSize;
+                if (s.x > 0 && s.y > 0 && s.z > 0)
+                    return new SimpleVector3(s.x, s.y, s.z);
+
+                if (def.prefab != null && TryGetBounds(def.prefab, out var b))
+                    return new SimpleVector3(b.size.x, b.size.y, b.size.z);
+
+                return SimpleVector3.Zero;
+            });
+
+            int wallCountAfter = bp.nodes.Count(n => n?.itemID != null && n.itemID.Contains("Wall"));
+            int removed = wallCountBefore - wallCountAfter;
+            if (doorCount > 0)
+            {
+                Debug.Log(
+                    $"[{name}] PostProcess RemoveDoorWallOverlaps: doors={doorCount}, wallsBefore={wallCountBefore}, wallsAfter={wallCountAfter}, removed={removed}.");
+            }
+        }
+
+        private GameObject CreateNodeObject(PropNode node, Dictionary<string, ItemDefinition> defMap, out bool isPhysical)
+        {
+            isPhysical = false;
+
+            if (node == null) return new GameObject("Node_NULL");
+
+            if (string.IsNullOrEmpty(node.itemID))
+            {
+                return new GameObject(node.instanceID);
+            }
+
+            defMap.TryGetValue(node.itemID, out var def);
+            if (def == null || def.prefab == null)
+            {
+                Debug.LogWarning($"[{name}] Missing prefab for ItemID '{node.itemID}', creating fallback primitive.");
+                isPhysical = true;
+                return CreateFallbackPrimitive(node, def);
+            }
+
+            var go = Instantiate(def.prefab);
+            go.name = node.instanceID;
+            isPhysical = true;
+
+            if (node.itemID != "DoorSystem")
+            {
+                ApplySizing(go.transform, node, def);
+            }
+
+            return go;
+        }
+
+        private void ApplySizing(Transform target, PropNode node, ItemDefinition def)
+        {
+            if (target == null || node == null) return;
+
+            // Prefer container-provided bounds size, but many child placements (scatter/fixed) don't populate logicalBounds.
+            Vector3 desired = Vector3.zero;
+            var s = node.logicalBounds.size;
+            if (s.x > 0 && s.y > 0 && s.z > 0) desired = new Vector3(s.x, s.y, s.z);
+            else if (def != null && def.logicalSize != Vector3.zero) desired = def.logicalSize;
+
+            if (desired == Vector3.zero) return;
 
             if (TryGetBounds(target.gameObject, out var bounds))
             {
                 Vector3 ratio = new Vector3(
-                    bounds.size.x != 0 ? size.x / bounds.size.x : 1f,
-                    bounds.size.y != 0 ? size.y / bounds.size.y : 1f,
-                    bounds.size.z != 0 ? size.z / bounds.size.z : 1f);
+                    bounds.size.x != 0 ? desired.x / bounds.size.x : 1f,
+                    bounds.size.y != 0 ? desired.y / bounds.size.y : 1f,
+                    bounds.size.z != 0 ? desired.z / bounds.size.z : 1f);
 
                 target.localScale = Vector3.Scale(target.localScale, ratio);
             }
         }
 
+        private static GameObject CreateFallbackPrimitive(PropNode node, ItemDefinition def)
+        {
+            PrimitiveType type = PrimitiveType.Cube;
+            if (node != null && !string.IsNullOrEmpty(node.itemID))
+            {
+                string id = node.itemID.ToLowerInvariant();
+                if (id.Contains("cup")) type = PrimitiveType.Sphere;
+                else if (id.Contains("key")) type = PrimitiveType.Capsule;
+            }
+
+            // Best-effort sizing: prefer node bounds (from container system), then ItemDefinition logical size.
+            Vector3 targetSize = Vector3.one;
+            if (node != null)
+            {
+                var s = node.logicalBounds.size;
+                if (s.x > 0 && s.y > 0 && s.z > 0) targetSize = new Vector3(s.x, s.y, s.z);
+            }
+            if (targetSize == Vector3.one && def != null && def.logicalSize != Vector3.zero)
+            {
+                targetSize = def.logicalSize;
+            }
+
+            var go = GameObject.CreatePrimitive(type);
+            go.name = node?.instanceID ?? "Fallback";
+            go.transform.localScale = targetSize;
+
+            // Ensure it's solid for snapping/physics unless the consumer decides otherwise.
+            var col = go.GetComponent<Collider>();
+            if (col != null) col.isTrigger = false;
+
+            return go;
+        }
+
+        // ApplyContainerSizing replaced by ApplySizing (node bounds or ItemDefinition logicalSize).
+
         private void ApplyPhysicsSnapping(Dictionary<string, Transform> spawned, RoomBlueprint bp)
         {
+            if (spawned == null || bp?.nodes == null) return;
+
             Physics.SyncTransforms();
-            foreach (var node in bp.nodes)
-            {
-                // ?唳銝?閬??(摰歇蝬 StructureGenerator 蝞末雿蔭鈭?
-                if (node.itemID.Contains("Floor")) continue;
 
-                if (spawned.TryGetValue(node.instanceID, out var child))
+            float floorY = transform.position.y;
+            if (TryGetFloorSurfaceY(spawned, bp, out var fy)) floorY = fy;
+
+            // Snap in parent-first order so children (e.g., cups) land on already-snapped parents (e.g., tables).
+            var nodeById = new Dictionary<string, PropNode>();
+            var physicalChildrenByParentId = new Dictionary<string, List<string>>();
+            foreach (var n in bp.nodes)
+            {
+                if (n == null) continue;
+                if (string.IsNullOrEmpty(n.instanceID)) continue;
+                if (!nodeById.ContainsKey(n.instanceID)) nodeById[n.instanceID] = n;
+
+                if (!string.IsNullOrEmpty(n.parentID) &&
+                    m_PhysicalInstanceIds.Contains(n.instanceID) &&
+                    !string.IsNullOrEmpty(n.parentID))
                 {
-                    // ?斗?臬??拐辣
-                    if (!string.IsNullOrEmpty(node.parentID) && spawned.TryGetValue(node.parentID, out var parent))
+                    if (!physicalChildrenByParentId.TryGetValue(n.parentID, out var list))
                     {
-                        // ?臬?鞎潭?摮?
-                        SnapChildToParentSurface(child, parent);
+                        list = new List<string>();
+                        physicalChildrenByParentId[n.parentID] = list;
                     }
-                    else
-                    {
-                        // 獢?鞎澆??(憒? StructureGenerator 蝞?皞??嗅祕?郊?臭???
-                        SnapToGround(child);
-                    }
+                    list.Add(n.instanceID);
                 }
+            }
+
+            int GetDepth(PropNode n)
+            {
+                int depth = 0;
+                var seen = new HashSet<string>();
+                string cur = n.parentID;
+                while (!string.IsNullOrEmpty(cur) && seen.Add(cur) && nodeById.TryGetValue(cur, out var p))
+                {
+                    depth++;
+                    cur = p.parentID;
+                }
+                return depth;
+            }
+
+            var ordered = bp.nodes
+                .Where(n => n != null &&
+                            !string.IsNullOrEmpty(n.instanceID) &&
+                            m_PhysicalInstanceIds.Contains(n.instanceID) &&
+                            (string.IsNullOrEmpty(n.itemID) || !n.itemID.Contains("Floor")))
+                .OrderBy(GetDepth)
+                .ToList();
+
+            foreach (var node in ordered)
+            {
+                if (!spawned.TryGetValue(node.instanceID, out var child) || child == null) continue;
+
+                if (!string.IsNullOrEmpty(node.parentID) && spawned.TryGetValue(node.parentID, out var parent) && parent != null)
+                {
+                    List<Transform> excludeRoots = null;
+                    if (physicalChildrenByParentId.TryGetValue(node.parentID, out var childIds) && childIds != null && childIds.Count > 0)
+                    {
+                        excludeRoots = new List<Transform>(childIds.Count);
+                        foreach (var id in childIds)
+                        {
+                            if (string.IsNullOrEmpty(id)) continue;
+                            if (!spawned.TryGetValue(id, out var t) || t == null) continue;
+                            excludeRoots.Add(t);
+                        }
+                    }
+
+                    if (TrySnapChildToParentSurface(child, parent, excludeRoots)) continue;
+                }
+
+                SnapToFloor(child, floorY);
+                Physics.SyncTransforms();
             }
         }
 
-        private void SnapChildToParentSurface(Transform child, Transform parent)
+        private bool TrySnapChildToParentSurface(Transform child, Transform parent, List<Transform> excludeFromParentBounds)
         {
-            float parentTop = parent.position.y;
-            var pCol = parent.GetComponentInChildren<Collider>();
-            if (pCol) parentTop = pCol.bounds.max.y;
+            if (child == null || parent == null) return false;
 
-            float childBottom = 0;
-            var cCol = child.GetComponentInChildren<Collider>();
-            if (cCol) childBottom = child.position.y - cCol.bounds.min.y;
+            // Prefer using only the parent's own geometry as the support surface (excluding physical children such as cups),
+            // otherwise earlier-snapped siblings can inflate the surface height and cause "stacking" in mid-air.
+            bool gotParent = false;
+            Bounds parentBounds = default;
 
+            if (TryGetOwnWorldBounds(parent, out parentBounds))
+            {
+                gotParent = true;
+            }
+            if (excludeFromParentBounds != null && excludeFromParentBounds.Count > 0)
+            {
+                gotParent = TryGetWorldBoundsExcludingRoots(parent, excludeFromParentBounds, out parentBounds);
+            }
+            if (!gotParent)
+            {
+                gotParent = TryGetWorldBounds(parent, child, out parentBounds);
+            }
+            if (!gotParent) return false;
+
+            if (!TryGetWorldBounds(child, null, out var childBounds)) return false;
+
+            float childBottomOffset = child.position.y - childBounds.min.y;
             Vector3 p = child.position;
-            p.y = parentTop + childBottom;
+            p.y = parentBounds.max.y + childBottomOffset;
             child.position = p;
+            return true;
         }
 
-        private void SnapToGround(Transform item)
+        private static bool TryGetOwnWorldBounds(Transform root, out Bounds bounds)
         {
-            float bottomOffset = 0;
-            // ??????拐辣??Collider (??芸楛???Ｙ??臬?)
-            var allColliders = item.GetComponentsInChildren<Collider>();
-            
-            if (allColliders.Length > 0)
+            bounds = default;
+            bool hasBounds = false;
+
+            var renderers = root.GetComponents<Renderer>();
+            foreach (var r in renderers)
             {
-                // 閮??雿? (?喳???
-                float minY = float.MaxValue;
-                foreach (var c in allColliders)
+                if (r == null) continue;
+                if (r.name.Contains("Outline")) continue;
+                if (r is ParticleSystemRenderer) continue;
+
+                if (!hasBounds)
                 {
-                    if (c.bounds.min.y < minY) minY = c.bounds.min.y;
+                    bounds = r.bounds;
+                    hasBounds = true;
                 }
-                bottomOffset = item.position.y - minY;
+                else
+                {
+                    bounds.Encapsulate(r.bounds);
+                }
             }
 
-            // ?? ?甇仿?嚗??????Collider
-            // ?見撠??????啗撌梧?撠瘚桀蝛箔葉
-            foreach (var c in allColliders) c.enabled = false;
+            if (hasBounds) return true;
 
-            // ?祇?皞??澆?
-            Vector3 startPos = item.position + Vector3.up * 10f; 
-            RaycastHit hit;
-            
-            // ?澆?撠? (?ㄐ?臭誑??LayerMask 蝣箔??芣??唳嚗???????芸楛?镼?
-            if (Physics.Raycast(startPos, Vector3.down, out hit, 50f))
+            var colliders = root.GetComponents<Collider>();
+            foreach (var c in colliders)
             {
-                // ?芣?????航撌?(?撌脩???鈭???靽) 銝??Ｗ???蝘餃?
-                item.position = hit.point + Vector3.up * bottomOffset;
+                if (c == null) continue;
+                if (!c.enabled) continue;
+                if (c.isTrigger) continue;
+
+                if (!hasBounds)
+                {
+                    bounds = c.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(c.bounds);
+                }
             }
 
-            // ???Ｗ儔甇仿?嚗??圈?????Collider
-            foreach (var c in allColliders) c.enabled = true;
+            return hasBounds;
         }
-        
-        private void AlignDoorToFloor(Transform door, Vector3 wallSize)
+
+        private static bool TryGetWorldBounds(Transform root, Transform excludeSubtree, out Bounds bounds)
         {
-            if (door == null) return;
-            
-            // Keep door's prefab scale; only ensure depth does not exceed wall thickness.
-            if (wallSize != Vector3.zero && wallSize.z > 0)
+            bounds = default;
+            bool hasBounds = false;
+
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
             {
-                Vector3 s = door.localScale;
-                if (s.z > wallSize.z) s.z = wallSize.z;
-                door.localScale = s;
+                if (r == null) continue;
+                if (r.name.Contains("Outline")) continue;
+                if (r is ParticleSystemRenderer) continue;
+                if (excludeSubtree != null && r.transform.IsChildOf(excludeSubtree)) continue;
+
+                if (!hasBounds)
+                {
+                    bounds = r.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(r.bounds);
+                }
             }
 
-            if (!TryGetBounds(door.gameObject, out var bounds)) return;
+            if (hasBounds) return true;
 
-            // Raycast to the floor and place the door so its bounds.min.y aligns to the hit point
-            // (after scaling).
-            Vector3 rayStart = door.position + Vector3.up * 5f;
-            if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 20f))
+            // Prefer solid colliders; if none exist, fall back to triggers (e.g., some interactables).
+            var colliders = root.GetComponentsInChildren<Collider>(true);
+            foreach (var c in colliders)
             {
-                float bottomOffset = bounds.min.y - door.position.y; // how far the current min is below the pivot
-                Vector3 p = door.position;
-                p.y = hit.point.y - bottomOffset;
-                door.position = p;
+                if (c == null) continue;
+                if (!c.enabled) continue;
+                if (c.isTrigger) continue;
+                if (excludeSubtree != null && c.transform.IsChildOf(excludeSubtree)) continue;
+
+                if (!hasBounds)
+                {
+                    bounds = c.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(c.bounds);
+                }
+            }
+
+            if (hasBounds) return true;
+
+            foreach (var c in colliders)
+            {
+                if (c == null) continue;
+                if (!c.enabled) continue;
+                if (excludeSubtree != null && c.transform.IsChildOf(excludeSubtree)) continue;
+
+                if (!hasBounds)
+                {
+                    bounds = c.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(c.bounds);
+                }
+            }
+
+            return hasBounds;
+        }
+
+        private static bool TryGetWorldBoundsExcludingRoots(Transform root, List<Transform> excludeRoots, out Bounds bounds)
+        {
+            bounds = default;
+            bool hasBounds = false;
+
+            bool IsExcluded(Transform t)
+            {
+                if (t == null) return false;
+                if (excludeRoots == null) return false;
+                for (int i = 0; i < excludeRoots.Count; i++)
+                {
+                    var ex = excludeRoots[i];
+                    if (ex == null) continue;
+                    if (t == ex || t.IsChildOf(ex)) return true;
+                }
+                return false;
+            }
+
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                if (r.name.Contains("Outline")) continue;
+                if (r is ParticleSystemRenderer) continue;
+                if (IsExcluded(r.transform)) continue;
+
+                if (!hasBounds)
+                {
+                    bounds = r.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(r.bounds);
+                }
+            }
+
+            if (hasBounds) return true;
+
+            var colliders = root.GetComponentsInChildren<Collider>(true);
+            foreach (var c in colliders)
+            {
+                if (c == null) continue;
+                if (!c.enabled) continue;
+                if (c.isTrigger) continue;
+                if (IsExcluded(c.transform)) continue;
+
+                if (!hasBounds)
+                {
+                    bounds = c.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(c.bounds);
+                }
+            }
+
+            return hasBounds;
+        }
+
+        private bool TryGetFloorSurfaceY(Dictionary<string, Transform> spawned, RoomBlueprint bp, out float y)
+        {
+            y = transform.position.y;
+            if (spawned == null || bp?.nodes == null) return false;
+
+            foreach (var n in bp.nodes)
+            {
+                if (n?.itemID == null) continue;
+                if (!n.itemID.Contains("Floor")) continue;
+                if (string.IsNullOrEmpty(n.instanceID)) continue;
+                if (!spawned.TryGetValue(n.instanceID, out var t) || t == null) continue;
+
+                // Important: use only the floor's own geometry, not children (walls/furniture),
+                // otherwise the "floor height" becomes the max of the whole subtree and everything floats.
+                if (TryGetOwnWorldBounds(t, out var own))
+                {
+                    y = own.max.y;
+                    return true;
+                }
+
+                if (TryGetBounds(t.gameObject, out var b))
+                {
+                    y = b.max.y;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void SnapToFloor(Transform item, float floorY)
+        {
+            if (item == null) return;
+
+            if (TryGetBounds(item.gameObject, out var b))
+            {
+                float bottomOffset = item.position.y - b.min.y;
+                var p = item.position;
+                p.y = floorY + bottomOffset;
+                item.position = p;
+                return;
+            }
+
+            // Fallback: raycast down.
+            var allColliders = item.GetComponentsInChildren<Collider>();
+            foreach (var c in allColliders)
+            {
+                if (c == null) continue;
+                c.enabled = false;
+            }
+
+            Vector3 startPos = item.position + Vector3.up * 10f;
+            if (Physics.Raycast(startPos, Vector3.down, out RaycastHit hit, 50f))
+            {
+                var p = item.position;
+                p.y = hit.point.y;
+                item.position = p;
+            }
+
+            foreach (var c in allColliders)
+            {
+                if (c == null) continue;
+                c.enabled = true;
             }
         }
 
-        private void ConfigureDoorSystem(Transform doorRoot, Vector3 wallSize, Vector3 roomSizeVec, float logicalWidthMultiplier = 1f)
+        private void ConfigureDoorSystem(Transform doorRoot, Vector3 wallSize, Vector3 roomSizeVec, float logicalWidthMultiplier)
         {
             if (doorRoot == null) return;
-
-            Debug.Log($"[RoomBuilder] ConfigureDoorSystem wallSize={wallSize}");
 
             float depth = wallSize.z > 0 ? wallSize.z : 0.2f;
             float height = wallSize.y > 0 ? wallSize.y : roomSizeVec.y;
             if (logicalWidthMultiplier < 1f) logicalWidthMultiplier = 1f;
-            float baseWidth = (wallSize.x > 0 ? wallSize.x : 4.0f) * logicalWidthMultiplier; // prefer actual wall width, scaled by logical tiles
-            float frameThickness = Mathf.Clamp(baseWidth * 0.05f, 0.08f, 0.12f);
-            float totalWidth = baseWidth; // the opening to fill
-            float doorWidth = Mathf.Max(totalWidth - frameThickness * 2f, totalWidth * 0.7f);
-            Debug.Log($"[RoomBuilder] ConfigureDoorSystem baseWidth={baseWidth:F2}, frameThickness={frameThickness:F2}, doorWidth={doorWidth:F2}, depth={depth:F2}, height={height:F2}");
 
-            doorRoot.localScale = Vector3.one;
-            doorRoot.localRotation = Quaternion.identity;
+            float baseWidth = (wallSize.x > 0 ? wallSize.x : 1f) * logicalWidthMultiplier;
+            float frameThickness = Mathf.Clamp(baseWidth * 0.05f, 0.08f, 0.12f);
+            float totalWidth = baseWidth;
+            float doorWidth = Mathf.Max(totalWidth - frameThickness * 2f, totalWidth * 0.7f);
+
+            // Prefer configuring the modular art loader when present; it provides a clear placeholder even without external art.
+            var artLoader = doorRoot.GetComponent<MyGame.Adapters.Unity.DoorArtLoader>();
+            if (artLoader != null)
+            {
+                // Normalize authored skeleton transforms so runtime sizing is deterministic (avoids layered scale/offset issues).
+                if (doorRoot.localScale != Vector3.one) doorRoot.localScale = Vector3.one;
+
+                // Enforce a stable skeleton:
+                // - Frame is a fixed sibling of the hinge (should NOT be under the hinge pivot)
+                // - DoorSlot is under hinge pivot
+                var hingeT = FindDeepChild(doorRoot, "DoorHinge") ?? FindDeepChild(doorRoot, "Hinge") ?? FindDeepChild(doorRoot, "HingeSlot");
+                if (hingeT != null && hingeT.parent != doorRoot) hingeT.SetParent(doorRoot, false);
+                if (hingeT != null)
+                {
+                    hingeT.localRotation = Quaternion.identity;
+                    hingeT.localScale = Vector3.one;
+                }
+
+                var frameSlot = FindDeepChild(doorRoot, "Frame");
+                if (frameSlot != null && frameSlot.parent != doorRoot) frameSlot.SetParent(doorRoot, false);
+                if (frameSlot != null)
+                {
+                    frameSlot.localPosition = Vector3.zero;
+                    frameSlot.localRotation = Quaternion.identity;
+                    frameSlot.localScale = Vector3.one;
+                }
+
+                var doorSlotT = FindDeepChild(doorRoot, "DoorSlot");
+                if (doorSlotT != null && hingeT != null && doorSlotT.parent != hingeT) doorSlotT.SetParent(hingeT, false);
+                if (doorSlotT != null)
+                {
+                    doorSlotT.localRotation = Quaternion.identity;
+                    doorSlotT.localScale = Vector3.one;
+                }
+
+                artLoader.createFallbackPrimitives = true;
+                artLoader.rebuildOnEnable = true;
+                artLoader.alignDoorToFrame = false;
+                artLoader.scaleDoorToFrame = false;
+
+                artLoader.sideSize = new Vector3(frameThickness, height, depth);
+                artLoader.topSize = new Vector3(totalWidth, frameThickness, depth);
+                // Make the door leaf slightly shorter than the opening so the top frame trim is visible.
+                float doorLeafH = Mathf.Max(0.5f, height - frameThickness);
+                artLoader.doorSize = new Vector3(doorWidth, doorLeafH, Mathf.Max(0.05f, depth * 0.5f));
+
+                artLoader.RebuildArt();
+
+                // Ensure the door controller rebinds to the rebuilt leaf/pivot and starts closed.
+                var ctrl = doorRoot.GetComponent<DoorController>();
+                if (ctrl != null)
+                {
+                    ctrl.autoAlignHinge = false; // DoorArtLoader already positions the hinge pivot.
+                    ctrl.hingeLocalOffset = Vector3.zero;
+                    ctrl.RefreshAfterArt(resetClosed: true);
+                }
+
+                // Make sure interaction targets a non-trigger collider (raycasts often ignore triggers).
+                Transform doorLeaf = FindDeepChild(doorRoot, "DoorLeaf");
+                if (doorLeaf == null && doorSlotT != null && doorSlotT.childCount > 0) doorLeaf = doorSlotT.GetChild(0);
+                if (doorLeaf != null)
+                {
+                    var leafCol = doorLeaf.GetComponent<Collider>();
+                    if (leafCol != null) leafCol.isTrigger = false;
+
+                    var interactable = doorLeaf.GetComponent<Interactable>();
+                    if (interactable == null) interactable = doorLeaf.gameObject.AddComponent<Interactable>();
+
+                    interactable.onInteract = new UnityEngine.Events.UnityEvent();
+                    if (ctrl != null) interactable.onInteract.AddListener(ctrl.TryOpen);
+                    interactable.outlineScript = null; // let Interactable auto-resolve/add outline/highlight
+                }
+
+                var rootCol = doorRoot.GetComponent<BoxCollider>();
+                if (rootCol != null)
+                {
+                    rootCol.size = new Vector3(totalWidth, height, depth);
+                    rootCol.center = new Vector3(0f, height / 2f, 0f);
+                    // Keep root collider as an interaction volume; the door leaf collider should handle blocking.
+                    rootCol.isTrigger = true;
+                }
+
+                return;
+            }
 
             Transform left = doorRoot.Find("Frame_Left");
             Transform right = doorRoot.Find("Frame_Right");
@@ -364,7 +804,6 @@ namespace MyGame.Adapters.Unity
             Transform hinge = doorRoot.Find("DoorHinge");
             Transform door = hinge != null ? hinge.Find("Door") : null;
 
-            // Position frames
             float half = totalWidth * 0.5f;
             if (left != null)
             {
@@ -384,14 +823,12 @@ namespace MyGame.Adapters.Unity
 
             if (hinge != null)
             {
-                // Keep hinge at the prefab pivot to avoid drifting; frames define the visible edges.
                 hinge.localPosition = Vector3.zero;
                 hinge.localScale = Vector3.one;
             }
             if (door != null)
             {
-                // Center the leaf between frames; hinge stays at pivot (0)
-                door.localPosition = new Vector3(0f, 0f, 0f);
+                door.localPosition = Vector3.zero;
                 door.localScale = new Vector3(doorWidth, height, depth);
 
                 var col = door.GetComponent<BoxCollider>();
@@ -402,32 +839,42 @@ namespace MyGame.Adapters.Unity
                     col.isTrigger = false;
                 }
             }
+        }
 
-            string lp = left != null ? left.localPosition.ToString() : "null";
-            string rp = right != null ? right.localPosition.ToString() : "null";
-            string tp = top != null ? top.localPosition.ToString() : "null";
-            string hp = hinge != null ? hinge.localPosition.ToString() : "null";
-            string dp = door != null ? door.localPosition.ToString() : "null";
-            Debug.Log($"[RoomBuilder] DoorSystem parts: leftPos={lp}, rightPos={rp}, topPos={tp}, hingePos={hp}, doorPos={dp}");
+        private static Transform FindDeepChild(Transform root, string childName)
+        {
+            if (root == null || string.IsNullOrEmpty(childName)) return null;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (t != null && t.name == childName) return t;
+            }
+            return null;
         }
 
         private Vector3 GetWallSize(Dictionary<string, ItemDefinition> defMap)
         {
-            if (cachedWallSize.HasValue) return cachedWallSize.Value;
+            if (m_CachedWallSize.HasValue) return m_CachedWallSize.Value;
 
             foreach (var pair in defMap)
             {
-                if (!pair.Key.Contains("Wall") || pair.Value == null || pair.Value.prefab == null) continue;
+                if (pair.Value == null) continue;
+                if (string.IsNullOrEmpty(pair.Key) || !pair.Key.Contains("Wall")) continue;
 
-                if (TryGetBounds(pair.Value.prefab, out var bounds))
+                if (pair.Value.logicalSize != Vector3.zero)
                 {
-                    cachedWallSize = bounds.size;
-                    return cachedWallSize.Value;
+                    m_CachedWallSize = pair.Value.logicalSize;
+                    return m_CachedWallSize.Value;
+                }
+
+                if (pair.Value.prefab != null && TryGetBounds(pair.Value.prefab, out var bounds))
+                {
+                    m_CachedWallSize = bounds.size;
+                    return m_CachedWallSize.Value;
                 }
             }
 
-            cachedWallSize = Vector3.zero;
-            return cachedWallSize.Value;
+            m_CachedWallSize = Vector3.zero;
+            return m_CachedWallSize.Value;
         }
 
         private bool TryGetBounds(GameObject go, out Bounds bounds)
@@ -438,49 +885,70 @@ namespace MyGame.Adapters.Unity
             bool hasBounds = false;
             foreach (var r in go.GetComponentsInChildren<Renderer>(true))
             {
-                if (r.name.Contains("Outline") || r is ParticleSystemRenderer) continue;
-                if (!hasBounds) { bounds = r.bounds; hasBounds = true; }
-                else bounds.Encapsulate(r.bounds);
+                if (r == null) continue;
+                if (r.name.Contains("Outline")) continue;
+                if (r is ParticleSystemRenderer) continue;
+
+                if (!hasBounds)
+                {
+                    bounds = r.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(r.bounds);
+                }
             }
 
             if (hasBounds) return true;
 
             foreach (var c in go.GetComponentsInChildren<Collider>(true))
             {
-                if (!hasBounds) { bounds = c.bounds; hasBounds = true; }
-                else bounds.Encapsulate(c.bounds);
+                if (c == null) continue;
+
+                if (!hasBounds)
+                {
+                    bounds = c.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(c.bounds);
+                }
             }
 
             return hasBounds;
         }
 
-        void OnDrawGizmos()
+        private void OnDrawGizmos()
         {
-            // ?怠暺獢?隞?”?輸?蝭?
             Gizmos.color = Color.yellow;
-            // ?ㄐ閬?敺株?蝞?銝?Gizmo ?葉敹???? transform.position ?虜?刻摨?
-            // ??DrawWireCube ?閬葉敹?
-            Vector3 center = transform.position + new Vector3(0, roomSize.y / 2, 0);
+            Vector3 center = transform.position + new Vector3(0, roomSize.y / 2f, 0);
             Gizmos.DrawWireCube(center, roomSize);
 
             if (transform.childCount > 0) DrawRecursive(transform);
         }
 
-        void DrawRecursive(Transform t)
+        private void DrawRecursive(Transform t)
         {
+            if (t == null || database == null) return;
+
             string id = t.name.Split('_')[0];
-            var def = database.Find(d => d.itemID == id);
-            if (def)
+            var def = database.Find(d => d != null && d.itemID == id);
+            if (def != null)
             {
                 Gizmos.color = Color.red;
-                Gizmos.DrawWireCube(t.position, def.logicalSize);
-                // ?芣?摰嗅???????唳銝??
+                var prev = Gizmos.matrix;
+                Gizmos.matrix = Matrix4x4.TRS(t.position, t.rotation, Vector3.one);
+                Gizmos.DrawWireCube(Vector3.zero, def.logicalSize);
+                Gizmos.matrix = prev;
                 if (!id.Contains("Floor"))
                 {
                     Gizmos.color = Color.green;
                     Gizmos.DrawWireSphere(t.position, def.logicalSize.x * 1.5f * 0.5f);
                 }
             }
+
             foreach (Transform c in t) DrawRecursive(c);
         }
     }
