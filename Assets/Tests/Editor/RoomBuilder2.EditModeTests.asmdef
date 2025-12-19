@@ -1,0 +1,22 @@
+{
+  "name": "RoomBuilder2.EditModeTests",
+  "rootNamespace": "",
+  "references": [
+    "RoomBuilder2.Runtime",
+    "QuickOutline"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

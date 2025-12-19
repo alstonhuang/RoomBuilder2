@@ -18,6 +18,9 @@ namespace MyGame.Adapters.Unity
 
         public RoomBlueprint blueprint;
 
+        [Header("Debug")]
+        public bool debugSnapping;
+
         private bool m_SkipNorthWallGeneration; // +Z
         private bool m_SkipSouthWallGeneration; // -Z
         private bool m_SkipEastWallGeneration;  // +X
@@ -111,6 +114,143 @@ namespace MyGame.Adapters.Unity
         {
             GenerateBlueprint();
             BuildFromGeneratedBlueprint();
+        }
+
+        [ContextMenu("Debug/Dump Height Outliers")]
+        public void DebugDumpHeightOutliers()
+        {
+            var all = GetComponentsInChildren<Transform>(true);
+            var entries = new List<(string name, float posY, float minY, float maxY)>();
+
+            foreach (var t in all)
+            {
+                if (t == null || t == transform) continue;
+                float posY = t.position.y;
+                float minY = posY;
+                float maxY = posY;
+                if (TryGetBounds(t.gameObject, out var b))
+                {
+                    minY = b.min.y;
+                    maxY = b.max.y;
+                }
+                entries.Add((t.name, posY, minY, maxY));
+            }
+
+            var top = entries
+                .OrderByDescending(e => e.posY)
+                .Take(20)
+                .ToList();
+
+            var bottom = entries
+                .OrderBy(e => e.posY)
+                .Take(20)
+                .ToList();
+
+            Debug.Log($"[RoomBuilder] Height outliers (top {top.Count} by position.y):");
+            foreach (var e in top)
+            {
+                Debug.Log($"[RoomBuilder]  {e.name}: posY={e.posY:F3}, boundsMinY={e.minY:F3}, boundsMaxY={e.maxY:F3}");
+            }
+
+            Debug.Log($"[RoomBuilder] Height outliers (bottom {bottom.Count} by position.y):");
+            foreach (var e in bottom)
+            {
+                Debug.Log($"[RoomBuilder]  {e.name}: posY={e.posY:F3}, boundsMinY={e.minY:F3}, boundsMaxY={e.maxY:F3}");
+            }
+        }
+
+        [ContextMenu("Debug/Dump Floating Walls (>2m)")]
+        public void DebugDumpFloatingWalls()
+        {
+            var walls = GetComponentsInChildren<Transform>(true)
+                .Where(t => t != null && t.name.StartsWith("Wall_", System.StringComparison.Ordinal))
+                .Where(t => t.position.y > 2f)
+                .OrderByDescending(t => t.position.y)
+                .Take(30)
+                .ToList();
+
+            if (walls.Count == 0)
+            {
+                Debug.Log("[RoomBuilder] No floating walls found (posY > 2).");
+                return;
+            }
+
+            Debug.Log($"[RoomBuilder] Floating walls (posY > 2): {walls.Count}");
+            foreach (var w in walls)
+            {
+                string path = GetHierarchyPath(w);
+                var lp = w.localPosition;
+                Debug.Log($"[RoomBuilder]  {path}: posY={w.position.y:F3}, localPos={lp}");
+            }
+        }
+
+        private static string GetHierarchyPath(Transform t)
+        {
+            if (t == null) return "<null>";
+            var parts = new System.Collections.Generic.List<string>();
+            var cur = t;
+            while (cur != null)
+            {
+                parts.Add(cur.name);
+                cur = cur.parent;
+            }
+            parts.Reverse();
+            return string.Join("/", parts);
+        }
+
+        [ContextMenu("Debug/Dump FloorY (Computed)")]
+        public void DebugDumpComputedFloorY()
+        {
+            // Prefer blueprint-based computation (matches snapping logic), but fall back to hierarchy-based detection
+            // because RoomBlueprint is not Unity-serializable and can be null after domain reload.
+            if (blueprint != null)
+            {
+                EnsureNodes(blueprint);
+                var spawned = new Dictionary<string, Transform>();
+                var all = GetComponentsInChildren<Transform>(true);
+                foreach (var t in all)
+                {
+                    if (t == null) continue;
+                    if (string.IsNullOrEmpty(t.name)) continue;
+                    if (!spawned.ContainsKey(t.name)) spawned[t.name] = t;
+                }
+
+                if (TryGetFloorSurfaceY(spawned, blueprint, out float y))
+                {
+                    Debug.Log($"[RoomBuilder] Computed floorY={y:F3} (from blueprint)");
+                    return;
+                }
+            }
+
+            // Fallback: find floor instances by name and compute the minimum top surface among them.
+            var floorTiles = GetComponentsInChildren<Transform>(true)
+                .Where(t => t != null && t.name.StartsWith("Floor_", System.StringComparison.Ordinal))
+                .ToList();
+
+            if (floorTiles.Count == 0)
+            {
+                Debug.LogWarning("[RoomBuilder] No Floor_* objects found; cannot compute floorY.");
+                return;
+            }
+
+            bool found = false;
+            float minTop = float.PositiveInfinity;
+            foreach (var t in floorTiles)
+            {
+                if (TryGetWorldBounds(t, null, out var b))
+                {
+                    if (b.max.y < minTop) minTop = b.max.y;
+                    found = true;
+                }
+            }
+
+            if (!found)
+            {
+                Debug.LogWarning("[RoomBuilder] Floor_* objects found but none had bounds; cannot compute floorY.");
+                return;
+            }
+
+            Debug.Log($"[RoomBuilder] Computed floorY={minTop:F3} (from hierarchy Floor_*)");
         }
 
         public Dictionary<string, Transform> BuildFromBlueprint(RoomBlueprint bp)
@@ -357,6 +497,10 @@ namespace MyGame.Adapters.Unity
 
             float floorY = transform.position.y;
             if (TryGetFloorSurfaceY(spawned, bp, out var fy)) floorY = fy;
+            if (debugSnapping)
+            {
+                Debug.Log($"[RoomBuilder] Snapping start: floorY={floorY:F3} (room='{name}')");
+            }
 
             // Snap in parent-first order so children (e.g., cups) land on already-snapped parents (e.g., tables).
             var nodeById = new Dictionary<string, PropNode>();
@@ -405,26 +549,99 @@ namespace MyGame.Adapters.Unity
             {
                 if (!spawned.TryGetValue(node.instanceID, out var child) || child == null) continue;
 
-                if (!string.IsNullOrEmpty(node.parentID) && spawned.TryGetValue(node.parentID, out var parent) && parent != null)
-                {
-                    List<Transform> excludeRoots = null;
-                    if (physicalChildrenByParentId.TryGetValue(node.parentID, out var childIds) && childIds != null && childIds.Count > 0)
-                    {
-                        excludeRoots = new List<Transform>(childIds.Count);
-                        foreach (var id in childIds)
-                        {
-                            if (string.IsNullOrEmpty(id)) continue;
-                            if (!spawned.TryGetValue(id, out var t) || t == null) continue;
-                            excludeRoots.Add(t);
-                        }
-                    }
+                // Only snap onto an IMMEDIATE physical parent (e.g., Cup -> Table). Do not walk up to logical containers:
+                // doing so is prone to using inflated bounds and causes "stacking" (walls/furniture floating up in the air).
+                // Structural pieces (walls/doors/windows) should never snap onto parents; they always snap to floor.
+                bool isStructural =
+                    node.containerKind == ContainerKind.Wall ||
+                    node.containerKind == ContainerKind.Door ||
+                    node.containerKind == ContainerKind.Window ||
+                    node.containerKind == ContainerKind.Ceiling ||
+                    (!string.IsNullOrEmpty(node.itemID) && node.itemID.Contains("Wall"));
 
-                    if (TrySnapChildToParentSurface(child, parent, excludeRoots)) continue;
+                if (!isStructural &&
+                    !string.IsNullOrEmpty(node.parentID) &&
+                    m_PhysicalInstanceIds.Contains(node.parentID) &&
+                    spawned.TryGetValue(node.parentID, out var parent) &&
+                    parent != null)
+                {
+                    float before = child.position.y;
+                    if (TrySnapChildToParentSurface(child, parent, excludeFromParentBounds: null))
+                    {
+                        if (debugSnapping && Mathf.Abs(child.position.y - before) > 0.25f)
+                        {
+                            Debug.Log($"[RoomBuilder] SnapToParent '{node.instanceID}' ({node.itemID}) parent='{node.parentID}' Δy={(child.position.y - before):F3}");
+                        }
+                        continue;
+                    }
                 }
 
+                float beforeFloor = child.position.y;
                 SnapToFloor(child, floorY);
+                if (debugSnapping && Mathf.Abs(child.position.y - beforeFloor) > 0.25f)
+                {
+                    Debug.Log($"[RoomBuilder] SnapToFloor '{node.instanceID}' ({node.itemID}) floorY={floorY:F3} Δy={(child.position.y - beforeFloor):F3}");
+                }
                 Physics.SyncTransforms();
             }
+        }
+
+        private static bool TryResolveSupportParent(
+            PropNode childNode,
+            Dictionary<string, PropNode> nodeById,
+            Dictionary<string, Transform> spawned,
+            Dictionary<string, List<string>> physicalChildrenByParentId,
+            out Transform supportParent,
+            out List<Transform> excludeRootsForBounds)
+        {
+            supportParent = null;
+            excludeRootsForBounds = null;
+
+            if (childNode == null || string.IsNullOrEmpty(childNode.parentID)) return false;
+
+            // Only snap onto a parent that has its own geometry (or stable bounds), not a logical grouping container.
+            // Otherwise, siblings inflate the parent's bounds and cause "stacking" in mid-air (walls/furniture floating).
+            var seen = new HashSet<string>();
+            string curId = childNode.parentID;
+            while (!string.IsNullOrEmpty(curId) && seen.Add(curId) && nodeById.TryGetValue(curId, out var parentNode))
+            {
+                if (!spawned.TryGetValue(curId, out var parentT) || parentT == null)
+                {
+                    curId = parentNode.parentID;
+                    continue;
+                }
+
+                // Build an exclusion list so we can measure only the parent's own geometry (not its physical children).
+                excludeRootsForBounds = null;
+                if (physicalChildrenByParentId.TryGetValue(curId, out var childIds) && childIds != null && childIds.Count > 0)
+                {
+                    excludeRootsForBounds = new List<Transform>(childIds.Count);
+                    foreach (var id in childIds)
+                    {
+                        if (string.IsNullOrEmpty(id)) continue;
+                        if (!spawned.TryGetValue(id, out var t) || t == null) continue;
+                        excludeRootsForBounds.Add(t);
+                    }
+                }
+
+                bool hasStableBounds =
+                    TryGetOwnWorldBounds(parentT, out _) ||
+                    (excludeRootsForBounds != null && excludeRootsForBounds.Count > 0 &&
+                     TryGetWorldBoundsExcludingRoots(parentT, excludeRootsForBounds, out _));
+
+                if (hasStableBounds)
+                {
+                    supportParent = parentT;
+                    return true;
+                }
+
+                // If this parent has no stable geometry, walk up (it might be a logical group container).
+                curId = parentNode.parentID;
+            }
+
+            supportParent = null;
+            excludeRootsForBounds = null;
+            return false;
         }
 
         private bool TrySnapChildToParentSurface(Transform child, Transform parent, List<Transform> excludeFromParentBounds)
@@ -639,29 +856,28 @@ namespace MyGame.Adapters.Unity
             y = transform.position.y;
             if (spawned == null || bp?.nodes == null) return false;
 
+            bool found = false;
+            float minTopY = float.PositiveInfinity;
             foreach (var n in bp.nodes)
             {
-                if (n?.itemID == null) continue;
-                if (!n.itemID.Contains("Floor")) continue;
+                if (n == null) continue;
+                // Prefer semantic kind over string matching to avoid accidentally treating non-floor nodes
+                // (or grouping containers) as the floor and floating everything.
+                if (n.containerKind != ContainerKind.Floor) continue;
                 if (string.IsNullOrEmpty(n.instanceID)) continue;
                 if (!spawned.TryGetValue(n.instanceID, out var t) || t == null) continue;
 
-                // Important: use only the floor's own geometry, not children (walls/furniture),
-                // otherwise the "floor height" becomes the max of the whole subtree and everything floats.
-                if (TryGetOwnWorldBounds(t, out var own))
+                // Floor tiles are leaf geometry; use their world bounds directly.
+                if (TryGetWorldBounds(t, null, out var b))
                 {
-                    y = own.max.y;
-                    return true;
-                }
-
-                if (TryGetBounds(t.gameObject, out var b))
-                {
-                    y = b.max.y;
-                    return true;
+                    if (b.max.y < minTopY) minTopY = b.max.y;
+                    found = true;
                 }
             }
 
-            return false;
+            if (!found) return false;
+            y = minTopY;
+            return true;
         }
 
         private void SnapToFloor(Transform item, float floorY)

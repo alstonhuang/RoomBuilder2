@@ -55,3 +55,4 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 021b0f2047fc8b840913e282cf6b34a9, type: 2}
   themeToBuild: LivingRoom
   roomSize: {x: 10, y: 1, z: 10}
+  debugSnapping: 1

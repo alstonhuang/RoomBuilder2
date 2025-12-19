@@ -156,7 +156,8 @@ namespace MyGame.Adapters.Unity
             if (m_RoomBuilders.Count == 1)
             {
                 var room = m_RoomBuilders[0];
-                float doorPosX = roomSize.x / 2;
+                float wallThickness = GetWallThickness();
+                float doorPosX = (roomSize.x / 2) + (wallThickness * 0.5f);
                 float doorPosZ = 0f;
 
                 room.blueprint.nodes.Add(new PropNode
@@ -188,7 +189,8 @@ namespace MyGame.Adapters.Unity
                 RoomBuilder roomB = m_RoomBuilders[i + 1]; // Room B is to the East of Room A
 
                 // Place the door centered on the shared wall (+X of A)
-                float doorPosX = roomSize.x / 2; // Position on the +X side of Room A
+                float wallThickness = GetWallThickness();
+                float doorPosX = (roomSize.x / 2) + (wallThickness * 0.5f); // Align with wall center (walls are pushed outward by half thickness)
                 float doorPosZ = 0f; // centered to avoid hitting corners
 
                 roomA.blueprint.nodes.Add(new PropNode
@@ -248,6 +250,20 @@ namespace MyGame.Adapters.Unity
 
             if (def.prefab != null && TryGetPrefabBounds(def.prefab, out var b)) return b.size;
             return Vector3.one;
+        }
+
+        private float GetWallThickness()
+        {
+            if (m_RoomBuilders.Count == 0) return 0f;
+            var db = m_RoomBuilders[0].database;
+            if (db == null) return 0f;
+
+            var def = db.Find(d => d != null && d.itemID == "Wall");
+            if (def == null) return 0f;
+
+            if (def.logicalSize.z > 0) return def.logicalSize.z;
+            if (def.prefab != null && TryGetPrefabBounds(def.prefab, out var b)) return b.size.z;
+            return 0f;
         }
 
         private bool TryGetPrefabBounds(GameObject prefab, out Bounds bounds)

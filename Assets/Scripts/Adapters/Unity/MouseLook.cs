@@ -2,10 +2,17 @@ using UnityEngine;
 
 public class MouseLook : MonoBehaviour
 {
-    public float mouseSensitivity = 100f;
+    public float mouseSensitivity = 900f;
     public Transform playerBody;
 
     float xRotation = 0f;
+
+    [Header("Testing")]
+    [Tooltip("When enabled, MouseLook ignores Input axes and uses Override Look Input instead (useful for automated tests).")]
+    public bool useOverrideInput;
+
+    [Tooltip("Override input delta (x=Mouse X axis, y=Mouse Y axis).")]
+    public Vector2 overrideLookInput;
 
     void Start()
     {
@@ -14,19 +21,16 @@ public class MouseLook : MonoBehaviour
 
     void Update()
     {
-        float mouseX = 0f, mouseY = 0f;
-#if ENABLE_INPUT_SYSTEM
-        var mouse = UnityEngine.InputSystem.Mouse.current;
-        if (mouse != null)
-        {
-            var delta = mouse.delta.ReadValue();
-            mouseX = delta.x * mouseSensitivity * Time.deltaTime;
-            mouseY = delta.y * mouseSensitivity * Time.deltaTime;
-        }
-#else
-        mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
-        mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
-#endif
+        Vector2 look = useOverrideInput
+            ? overrideLookInput
+            : new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y"));
+
+        // Compatibility with legacy projects:
+        // - If sensitivity is a large number (typical 50-200), treat it as "degrees per second" and scale by deltaTime.
+        // - If sensitivity is a small number (typical 0.5-10), treat it as "degrees per frame" and don't scale by deltaTime.
+        float scale = mouseSensitivity > 10f ? Time.deltaTime : 1f;
+        float mouseX = look.x * mouseSensitivity * scale;
+        float mouseY = look.y * mouseSensitivity * scale;
 
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);

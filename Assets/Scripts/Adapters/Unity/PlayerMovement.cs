@@ -19,18 +19,8 @@ public class PlayerMovement : MonoBehaviour
         if (controller == null) return;
 
         // 1. 處理移動 (WASD)
-        float x = 0f, z = 0f;
-#if ENABLE_INPUT_SYSTEM
-        var kb = UnityEngine.InputSystem.Keyboard.current;
-        if (kb != null)
-        {
-            x = (kb.aKey.isPressed ? -1f : 0f) + (kb.dKey.isPressed ? 1f : 0f);
-            z = (kb.sKey.isPressed ? -1f : 0f) + (kb.wKey.isPressed ? 1f : 0f);
-        }
-#else
-        x = Input.GetAxis("Horizontal");
-        z = Input.GetAxis("Vertical");
-#endif
+        float x = Input.GetAxis("Horizontal");
+        float z = Input.GetAxis("Vertical");
 
         Vector3 move = transform.right * x + transform.forward * z;
         controller.Move(move * moveSpeed * Time.deltaTime);

@@ -65,3 +65,7 @@ Desktop.ini
 
 # Crashlytics generated file
 crashlytics-build.properties
+
+# Test report outputs (created by Tools/Tests/AllTestsRunner)
+/TestReports/
+TestResults_*.xml

@@ -19,7 +19,13 @@ public class PlayerInteraction : MonoBehaviour
 
     void Awake()
     {
-        ResolveEye();
+        ResolveEye(false);
+    }
+
+    void Start()
+    {
+        // Allow other scripts/tests to assign `eye` before Start (AddComponent triggers Awake immediately).
+        ResolveEye(true);
     }
 
     void Update()
@@ -94,10 +100,6 @@ public class PlayerInteraction : MonoBehaviour
 
     bool IsInteractPressed()
     {
-#if ENABLE_INPUT_SYSTEM
-        var kb = UnityEngine.InputSystem.Keyboard.current;
-        if (kb != null && kb.eKey.wasPressedThisFrame) return true;
-#endif
         return Input.GetKeyDown(KeyCode.E);
     }
 
@@ -109,7 +111,7 @@ public class PlayerInteraction : MonoBehaviour
         }
     }
 
-    private void ResolveEye()
+    private void ResolveEye(bool warnIfFallback)
     {
         if (eye != null)
         {
@@ -134,7 +136,11 @@ public class PlayerInteraction : MonoBehaviour
 
         // 最後保底：使用自身 Transform，並提醒需要設定
         m_Eye = transform;
-        Debug.LogWarning("[PlayerInteraction] No eye/camera assigned; using self transform for raycasts. Assign 'eye' to your camera for accurate interaction.");
+        m_Eye = transform;
+        if (warnIfFallback)
+        {
+            Debug.LogWarning("[PlayerInteraction] No eye/camera assigned; using self transform for raycasts. Assign 'eye' to your camera for accurate interaction.");
+        }
     }
 
     public void AddKey()

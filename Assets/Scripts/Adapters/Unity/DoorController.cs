@@ -9,6 +9,10 @@ public class DoorController : MonoBehaviour
     [Tooltip("Optional hinge pivot; if null will auto-find a child named 'DoorHinge' or 'Hinge' or fall back to self.")]
     public Transform hinge;
 
+    [Header("Door Plane")]
+    [Tooltip("Optional transform that defines the door plane normal (marker.forward). If null, falls back to the door root forward.")]
+    public Transform doorPlaneMarker;
+
     [Tooltip("Optional local offset applied to the hinge after setup (useful when the pivot sits at the door center).")]
     public Vector3 hingeLocalOffset = Vector3.zero;
 
@@ -29,9 +33,17 @@ public class DoorController : MonoBehaviour
     private Transform _pivot;
     private bool _pivotBaseCaptured;
     private Vector3 _pivotBaseLocalPosition;
+    private const float CloseAngleEpsilonDeg = 1f; // ε_closeAngle (kept in sync with SPEC)
 
     void Awake()
     {
+        // Avoid mutating authored transforms in Edit Mode (recompiles/tests can trigger Awake/OnEnable).
+        if (!Application.isPlaying)
+        {
+            _pivot = ResolvePivot();
+            return;
+        }
+
         _pivot = ResolvePivot();
         EnsureOnlyDoorRotates();
         CapturePivotBaseLocalPosition();
@@ -61,6 +73,7 @@ public class DoorController : MonoBehaviour
 
     void OnEnable()
     {
+        if (!Application.isPlaying) return;
         if (_pivot == null) _pivot = ResolvePivot();
 
         // Ensure hinge is parented to this door root so local rotation is relative to the frame.
@@ -81,6 +94,12 @@ public class DoorController : MonoBehaviour
         float targetAngleY = _isOpen ? (closeAngle + _openSign * openAngle) : closeAngle;
         _currentYaw = Mathf.MoveTowardsAngle(_currentYaw, targetAngleY, rotateSpeedDegPerSec * Time.deltaTime);
         _pivot.localRotation = Quaternion.Euler(0f, _currentYaw, 0f);
+
+        // When fully closed, allow direction to be re-chosen next time based on player's side.
+        if (!_isOpen && Mathf.Abs(Mathf.DeltaAngle(_currentYaw, closeAngle)) <= CloseAngleEpsilonDeg)
+        {
+            _openSignChosen = false;
+        }
     }
 
     public void TryOpen()
@@ -108,8 +127,8 @@ public class DoorController : MonoBehaviour
             return;
         }
 
-        // Choose direction once so repeated open/close does not flip or drift.
-        if (!_isOpen && !_openSignChosen)
+        // Choose direction only when starting to open from a fully-closed state.
+        if (!_isOpen && !_openSignChosen && Mathf.Abs(Mathf.DeltaAngle(_currentYaw, closeAngle)) <= CloseAngleEpsilonDeg)
         {
             _openSign = ChooseOpenSign();
             _openSignChosen = true;
@@ -120,7 +139,6 @@ public class DoorController : MonoBehaviour
 
     private int ChooseOpenSign()
     {
-        // Default heuristic: hinge side implies a preferred open direction (prevents opening into the frame for many prefabs).
         int fallback = hingeOnLeft ? 1 : -1;
 
         var pivot = _pivot != null ? _pivot : ResolvePivot();
@@ -134,24 +152,49 @@ public class DoorController : MonoBehaviour
             .FirstOrDefault(r => r != null && LooksLikeDoorLeaf(r.transform));
         if (leafRenderer == null) return fallback;
 
-        // Evaluate both directions without mutating transforms (avoids quaternion drift/spin over repeated toggles).
+        // Player-side rule: open away from the side the player is currently on (door plane).
+        var planeNormal = ResolveDoorPlaneNormalWorld();
+        if (planeNormal.sqrMagnitude < 0.0001f) return fallback;
+
+        Vector3 planePoint = transform.position;
+        Vector3 toPlayer = player.transform.position - planePoint;
+        float side = Vector3.Dot(toPlayer, planeNormal);
+        int playerSide = side >= 0f ? 1 : -1;
+
+        // Evaluate both swing directions without mutating transforms.
         Vector3 pivotLocalCenter = pivot.InverseTransformPoint(leafRenderer.bounds.center);
-        Vector3 playerPos = player.transform.position;
+        Vector3 closedWorld = pivot.TransformPoint(pivotLocalCenter);
 
-        Vector3 centerPos = pivot.TransformPoint(Quaternion.Euler(0f, openAngle, 0f) * pivotLocalCenter);
-        Vector3 centerNeg = pivot.TransformPoint(Quaternion.Euler(0f, -openAngle, 0f) * pivotLocalCenter);
+        Vector3 worldPos = pivot.TransformPoint(Quaternion.Euler(0f, openAngle, 0f) * pivotLocalCenter);
+        Vector3 worldNeg = pivot.TransformPoint(Quaternion.Euler(0f, -openAngle, 0f) * pivotLocalCenter);
 
-        float distPos = (centerPos - playerPos).sqrMagnitude;
-        float distNeg = (centerNeg - playerPos).sqrMagnitude;
+        float dotPos = Vector3.Dot(worldPos - closedWorld, planeNormal);
+        float dotNeg = Vector3.Dot(worldNeg - closedWorld, planeNormal);
 
-        if (Mathf.Abs(distPos - distNeg) < 0.0001f) return fallback;
-        return distPos > distNeg ? 1 : -1;
+        // Want the door leaf to move toward the opposite side of the player.
+        // If player is on +normal side, choose direction with more negative dot; vice versa for -normal.
+        if (playerSide > 0)
+        {
+            if (dotPos <= dotNeg) return 1;
+            return -1;
+        }
+        else
+        {
+            if (dotPos >= dotNeg) return 1;
+            return -1;
+        }
     }
 
     public void UnlockDoor()
     {
         isLocked = false;
         Debug.Log("[DoorController] Door unlocked.");
+    }
+
+    private Vector3 ResolveDoorPlaneNormalWorld()
+    {
+        if (doorPlaneMarker != null) return doorPlaneMarker.forward.normalized;
+        return transform.forward.normalized;
     }
 
     private Transform ResolvePivot()

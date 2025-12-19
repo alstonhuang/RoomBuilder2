@@ -1,0 +1,19 @@
+{
+  "name": "RoomBuilder2.EditorTools",
+  "rootNamespace": "",
+  "references": [
+    "RoomBuilder2.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
+

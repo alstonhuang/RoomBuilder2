@@ -1,0 +1,17 @@
+{
+  "name": "RoomBuilder2.Runtime",
+  "rootNamespace": "",
+  "references": [
+    "QuickOutline",
+    "RoomBuilder2.ImportedCoreBackup"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

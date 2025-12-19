@@ -1,8 +1,19 @@
 using UnityEngine;
 
-[ExecuteAlways]
 public class WallLayout : MonoBehaviour
 {
+    [Header("Auto Layout")]
+    [Tooltip("Runs Layout() automatically in Edit Mode. Disabled by default to avoid modifying scene objects unexpectedly.")]
+    public bool autoLayoutInEditMode = false;
+
+    [Tooltip("Runs Layout() automatically in Play Mode. Disabled by default (runtime builders should control placement).")]
+    public bool autoLayoutInPlayMode = false;
+
+#if UNITY_EDITOR
+    [Tooltip("When enabled, auto layout in Edit Mode only runs while editing a prefab in Prefab Mode (not in regular scenes).")]
+    public bool onlyInPrefabModeInEdit = true;
+#endif
+
     [Header("房間規則")]
     public float totalWidth = 4f;
     public float totalHeight = 4f;
@@ -23,6 +34,16 @@ public class WallLayout : MonoBehaviour
     [Range(0f, 0.1f)] public float overlap = 0.02f; // 新增：重疊量，消除縫隙
 
     void Update()
+    {
+        // Never mutate scene objects automatically in Edit Mode.
+        if (!Application.isPlaying) return;
+
+        if (!autoLayoutInPlayMode) return;
+        Layout();
+    }
+
+    [ContextMenu("Layout Now")]
+    public void LayoutNow()
     {
         Layout();
     }
@@ -92,4 +113,5 @@ public class WallLayout : MonoBehaviour
             topPanel.localPosition = new Vector3(0, topY, 0);
         }
     }
+
 }

@@ -1,0 +1,20 @@
+{
+  "name": "RoomBuilder2.PlayModeTests",
+  "rootNamespace": "",
+  "references": [
+    "RoomBuilder2.Runtime",
+    "QuickOutline"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

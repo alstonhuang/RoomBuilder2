@@ -36,6 +36,14 @@ namespace MyGame.Adapters.Unity
         public bool rebuildOnEnable = true;
         public bool createFallbackPrimitives = true;
 
+#if UNITY_EDITOR
+        [Tooltip("If enabled, rebuilds art in Edit Mode too (useful in Prefab Mode).")]
+        public bool rebuildInEditMode = false;
+
+        [Tooltip("If enabled, only rebuild in Edit Mode while editing a prefab in Prefab Mode (not in regular scenes).")]
+        public bool onlyInPrefabModeInEdit = true;
+#endif
+
         [Header("Target Sizes (slot scales)")]
         public Vector3 topSize = new Vector3(1f, 0.2f, 0.2f);
         public Vector3 sideSize = new Vector3(0.2f, 2f, 0.2f);
@@ -113,9 +121,29 @@ namespace MyGame.Adapters.Unity
         {
             if (rebuildOnEnable)
             {
-                RebuildArt();
+                if (Application.isPlaying)
+                {
+                    RebuildArt();
+                    return;
+                }
+
+#if UNITY_EDITOR
+                if (rebuildInEditMode && (!onlyInPrefabModeInEdit || IsInPrefabStage()))
+                {
+                    RebuildArt();
+                }
+#endif
             }
         }
+
+#if UNITY_EDITOR
+        private bool IsInPrefabStage()
+        {
+            var stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+            if (stage == null) return false;
+            return gameObject.scene == stage.scene;
+        }
+#endif
 
         private bool BuildFrameIfProvided(Transform frameContentSlot)
         {

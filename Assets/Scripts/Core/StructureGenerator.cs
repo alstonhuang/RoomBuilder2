@@ -66,6 +66,7 @@ namespace MyGame.Core
 
             float width = roomBounds.size.x;
             float depth = roomBounds.size.z;
+            float thickness = wallSize.z;
 
             // Calculate boundary positions
             float xMin = roomBounds.center.x - width / 2;
@@ -79,7 +80,7 @@ namespace MyGame.Core
             {
                 for (float x = xMin; x < xMax; x += wallSize.x)
                 {
-                    nodes.Add(CreateWallNode(wallItemID, wallSize, x + wallSize.x/2, zMin, 0, Facing.South));
+                    nodes.Add(CreateWallNode(wallItemID, wallSize, x + wallSize.x/2, zMin - (thickness * 0.5f), 0, Facing.South));
                 }
             }
 
@@ -89,7 +90,7 @@ namespace MyGame.Core
             {
                 for (float x = xMin; x < xMax; x += wallSize.x)
                 {
-                    nodes.Add(CreateWallNode(wallItemID, wallSize, x + wallSize.x/2, zMax, 180, Facing.North));
+                    nodes.Add(CreateWallNode(wallItemID, wallSize, x + wallSize.x/2, zMax + (thickness * 0.5f), 180, Facing.North));
                 }
             }
 
@@ -99,7 +100,7 @@ namespace MyGame.Core
             {
                 for (float z = zMin; z < zMax; z += wallSize.x) // 瘜冽??ㄐ????wallSize.x (?祝)
                 {
-                    nodes.Add(CreateWallNode(wallItemID, wallSize, xMin, z + wallSize.x/2, 90, Facing.West));
+                    nodes.Add(CreateWallNode(wallItemID, wallSize, xMin - (thickness * 0.5f), z + wallSize.x/2, 90, Facing.West));
                 }
             }
 
@@ -109,7 +110,7 @@ namespace MyGame.Core
             {
                 for (float z = zMin; z < zMax; z += wallSize.x)
                 {
-                    nodes.Add(CreateWallNode(wallItemID, wallSize, xMax, z + wallSize.x/2, 270, Facing.East));
+                    nodes.Add(CreateWallNode(wallItemID, wallSize, xMax + (thickness * 0.5f), z + wallSize.x/2, 270, Facing.East));
                 }
             }
             return nodes;
