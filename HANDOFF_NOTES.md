@@ -1,41 +1,58 @@
 ## Context / Current State
 
-- Project: Unity procedural room generator (`RoomBuilder2`).
-- Recent issue: connecting rooms creates overlapping walls/doors. Ongoing fixes in `Assets/Scripts/Adapters/Unity/LevelDirector.cs` and `RoomBuilder.cs`.
+- Project: Unity procedural room generator (`RoomBuilder2`) using Container-first blueprint generation.
+- Unity: 6000.0.62f1 (Windows).
+- Current active branch (as of v0.6.6): `refactor/container-review`.
+- Goal: single-room generation is stable and testable with **fallback primitives** even when no art is provided.
 
-## Key Changes Made
+## Architecture Snapshot
 
-- Moved Unity scripts under `Assets/Scripts/Adapters/Unity/`; Core remains in `Assets/Scripts/Core/`.
-- Prefabs consolidated into `Assets/Prefabs/`.
-- Added `Assets/Scripts/Core/BlueprintPostProcessor.cs` for core-side wall/door overlap cleanup.
-- In `RoomBuilder.cs`: logs for `RemoveDoorWallOverlaps`, door auto-resize aligned to wall height, uses prefab bounds first.
-- In `LevelDirector.cs`: multiple iterations to avoid double walls/doors. Current logic:
-  - When connecting Room A (+X wall) to Room B (-X wall):
-    - Detect walls on both planes; keep the side that has walls (prefers A if both or both empty).
-    - Remove all walls on the other side.
-    - Remove one wall segment on the kept side to place a single Door node (only in kept room).
-    - Adds a Key to the kept room.
-  - Epsilon for wall matching currently 0.5.
-  - Logs show `keepA/keepB`, removed counts.
+- Core logic: `Assets/Scripts/Core/` (no Unity API)
+  - `RoomGenerator` produces `RoomBlueprint` from rules/themes.
+  - `RoomBlueprint` can be a container tree; Unity adapter flattens it for spawning.
+- Unity adapter: `Assets/Scripts/Adapters/Unity/`
+  - `RoomBuilder` instantiates prefabs, applies container sizing, and performs snapping (floor + parent surface only for physical parents like Cup→Table).
+  - `DoorSystem` uses a hinge child to guarantee correct pivot; `DoorArtLoader` supports slot-based art with fallback primitives.
 
-## Outstanding Issue
+## Testing / Tooling
 
-- Room B ends up missing the shared wall after the connect step (no double wall, but B has no wall). Need a shared-wall approach or ensure B still has a wall surface.
-- Idea: generate a shared wall prefab/segment at the boundary instead of removing B's wall; or skip generating B's wall initially if A has one (pre-check before wall generation).
+- Spec: `Docs/SPEC.md`
+- Tests:
+  - EditMode: `Assets/Tests/Editor`
+  - PlayMode: `Assets/Tests/PlayMode`
+- One-click runner + report export:
+  - `Tools/Tests/Run * and Export Report`
+  - `Tools/Tests/Run All (Edit + Play + Player) and Export Reports`
+  - Outputs: `TestReports/` (ignored by `.gitignore`)
+- Debug utilities:
+  - `Tools/Tests/Copy AllTestsRunner Logs (Last 400 Lines)` / `Copy Unity Editor Log Tail`
+  - If stuck: `Tools/Tests/Force Clear Active Run Lock (Stuck Fix)`
+  - If scene left in temp/Untitled: `Tools/Tests/Restore Last Captured Scenes Now`
 
-## Useful Logs
+## Key Fixes (recent)
 
-- `RoomBuilder`: `PostProcess RemoveDoorWallOverlaps: doors=..., wallsBefore=..., wallsAfter=..., removed=...`
-- `LevelDirector`: logs like `Connecting Room_0<->Room_1: keepA=true, removedAOne=..., removedBAll=...`
+- Snapping: walls/floor/door/window snap to computed floorY; small props snap to **immediate physical parent surface** (prevents “stacking up” floating walls).
+- Door stability: hinge-based rotation avoids “flip direction after toggles” and pivot drift; door opens away from player side in tests.
+- AllTestsRunner: handles temp-scene isolation + cleanup phases; avoids duplicated runs/finish dialogs; supports restoring the user’s original scene.
+- MouseLook: default sensitivity set to `900` with deterministic override input for tests.
 
-## Next Steps (suggested)
+## Current Behavior Guarantees (Phase 1)
 
-- Implement shared-wall generation: remove both side wall nodes on the shared plane, then add a single shared wall (with door cut) anchored to one room.
-- Alternatively, pre-check during wall generation to avoid duplicating walls on opposite planes (e.g., core-level rule: only one room generates +X wall when adjacent room exists).
-- Reduce epsilon after stable targeting; ensure wall itemID filter matches actual wall IDs (currently checks `Contains("Wall")`).
+- Works without external art: missing art uses fallback primitives so structure/scale/interaction remain visible and testable.
+- Single-room invariants validated by tests:
+  - Door opens away from player side
+  - Cup ends on table top
+  - Focus highlight always visible (outline or fallback)
 
-## Files to open
+## Planned Next Step (Phase 2, not implemented yet)
 
-- `Assets/Scripts/Adapters/Unity/LevelDirector.cs`
-- `Assets/Scripts/Adapters/Unity/RoomBuilder.cs`
-- `Assets/Scripts/Core/BlueprintPostProcessor.cs`
+- **Reskin / ArtSet**: keep the same `RoomBlueprint` and rebuild scene with different visual sets.
+- Proposed precedence: explicit item override > ArtSet mapping > ItemDefinition default > fallback primitive.
+
+## Files to open first
+
+- Spec: `Docs/SPEC.md`
+- Scene build + snapping: `Assets/Scripts/Adapters/Unity/RoomBuilder.cs`
+- Door system: `Assets/Scripts/Adapters/Unity/DoorController.cs`, `Assets/Scripts/Adapters/Unity/DoorArtLoader.cs`
+- Test runner: `Assets/Scripts/Editor/AllTestsRunner.cs`
+- PlayMode specs: `Assets/Tests/PlayMode/SceneGenerationSpecsTests.cs`, `Assets/Tests/PlayMode/PlayerInteractionSpecsTests.cs`

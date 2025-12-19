@@ -1,120 +1,128 @@
 # Specification-Driven Development (SDD) — RoomBuilder2
 
-本文件是本專案的「規格真相來源」。實作與測試必須以此為準；我們不做「一一比對特定 layout」，而是用 **invariants（不變條件）** 驗證無限生成下仍不違反規則。
+本文件定義專案的「規格與不變條件（invariants）」；實作與測試必須以此為準。
+測試不做 layout 逐一比對，而是驗證規則是否被違反。
 
-## 範圍（Phase 1）
+## 範圍（Phase 1：單一房間）
+- 只涵蓋 single-room 的 Blueprint 與 Scene 生成。
+- 測試分層：
+  - **EditMode（Core）**：只驗證 Blueprint / Container / Rules，不依賴 Prefab / Physics。
+  - **PlayMode（Unity Adapter）**：驗證場景生成、Physics snapping、互動、focus 高亮。
 
-- 僅涵蓋 **單一房間**（single room）。
-- 測試分為：
-  - **EditMode（Core）**：只驗證 Blueprint/容器/規則的不變條件（不依賴 Prefab、Physics）。
-  - **PlayMode（Unity Adapter）**：驗證生成後場景與互動的不變條件（含 Physics/Raycast）。
-
-## 名詞與定義
-
-### 容差（Tolerances）
-
-- `ε_snap = 0.01m`：貼合判定容差（落地/桌面貼合）
+## 容差（Tolerances）
+- `ε_snap = 0.01m`：貼齊判定容差（落地/落桌）
 - `ε_closeAngle = 1°`：門關閉角度容差
 
-### Door（玩家側決定）
-
-- Door 在「從關門狀態觸發開門」時，必須依 **玩家位於門平面哪一側** 決定開門方向，使門板「往玩家不在的那側」開。
-- 方向決策必須遵守：
-  - 在同一次開/關過程中不可翻向（避免抖動/漂移）
-  - 僅允許在「關門狀態」重新決定方向（避免半開/半關時重算造成翻向）
-  - 當門回到「關門狀態」後，下次互動可以重新依玩家所在側重新決定方向
-
-> 門平面法線（Door plane normal）來源：
-> 1) 優先使用牆容器提供的法線（結構資訊）
-> 2) 若沒有牆資訊，使用門的 marker（例如 `DoorPlaneMarker`）
-> 3) 再不行才退到 `doorRoot.transform.forward`
-
-### TableTop（桌面）
-
-桌面高度來源：
-1) 優先使用 `TableTopMarker`（由資產定義桌面平面/區域）
-2) 若沒有 marker，退回桌子 Collider/Renderer 的 bounds（近似桌面）
-
-## 規格
+## 規格（Phase 1）
 
 ### BP-1 生成正確藍圖（Core）
+Given
+- 一個房間 bounds（`SimpleBounds`）
+- 一個 generation theme（例如 `LivingRoom`）
 
-Given：
-- 一個房間 bounds（`SimpleBounds`）與 theme
-
-When：
+When
 - `RoomGenerator.GenerateFromTheme(...)`
 
-Then（invariants）：
+Then（invariants）
 - `RoomBlueprint.nodes` 非空，且至少包含：
   - Floor 類（例如 `FloorTile`）
   - Wall 類（例如 `Wall`）
-  - theme 指定的家具（例如 `Table`）
-  - 規則衍生物件（例如 `Cup` 由 `Table` 規則生成）
-- `instanceID` 唯一（nodes 範圍）
-- parent 參照必須合法：
-  - `parentID` 為 null/empty 或指向 nodes 中存在的 `instanceID`
-  - parent 關係不得形成 cycle
-- 牆節點朝向一致（`Facing` 與 `rotation.y` 對應）：
-  - South→0°、West→90°、North→180°、East→270°
-- **局部放置語意**：
-  - 由規則以 Fixed/Local-offset 放置的子物件，其 `logicalBounds.size` 必須為 `default`（零），以表示 `position` 是 parent-local offset
+  - theme 需要的家具/道具（例如 `Table`、`Cup`）
+- `instanceID` 必須唯一
+- `parentID` 只能為空或指向同 blueprint 內存在的 `instanceID`
+- 不允許形成 parent cycle
+- `logicalBounds.size` 為「容器語意大小」，可用於 Adapter 端 fit / snapping 決策
 
 ### SC-1 生成正確場景（Unity Adapter）
+Given
+- 一份 Blueprint（single room）
+- 一組 ItemDefinition（允許 placeholder/fallback，不依賴外部美術）
 
-Given：
-- 一個 Blueprint（單房）
-- 一組 ItemDefinition（可為 placeholder/fallback，不依賴外部美術）
-
-When：
+When
 - `RoomBuilder.BuildFromGeneratedBlueprint()`
 
-Then（invariants）：
-- **落地/落桌貼合**（`ε_snap`）：
-  - Table 會落在 floor 上（table bottom ≈ floor surface）
-  - Cup 會落在 table 上（cup bottom ≈ table top，且 XY 投影落在桌面 bounds 範圍內）
-- Door：
-  - Door leaf collider 不可為 trigger（關門時不可穿透）
-  - 連續開關不產生旋轉漂移（角度回到 closeAngle 容差 `ε_closeAngle` 內）
+Then（invariants）
+- **永遠可見（fallback）**
+  - 即使缺少美術/Prefab/材質，也必須以 fallback primitives 生成可見物件（用於結構驗證與測試）
+- **落地/落桌（ε_snap）**
+  - Table 底部貼齊 floor 表面（within `ε_snap`）
+  - Cup 底部貼齊 table top（within `ε_snap`），且 XZ 投影落在桌面 bounds 內
+- **Door**
+  - Door leaf collider 不可為 trigger（未開門不可穿過）
+  - Door 關閉角度可回到 closeAngle 容差 `ε_closeAngle`
+- **容器到實體**
+  - 生成時允許多層容器，但只有末端才落到「實體物件容器」並產生可見 GameObject（避免中間層拿到不必要的 scale/renderer/collider）
 
 ### INT-1 互動一定有 focus 顯示（Unity Adapter）
+Given
+- 玩家視線 Raycast 命中 Interactable（Key / Door…）
 
-Given：
-- 玩家視線 Raycast 命中 Interactable（Key / Door 等）
+When
+- `PlayerInteraction` 更新 hover
 
-When：
-- PlayerInteraction 更新 hover
+Then（invariants）
+- 必須滿足其一：
+  - `Outline.enabled == true`（QuickOutline）
+  - fallback highlight 生效（材質/PropertyBlock 的可觀測變化）
 
-Then：
-- 至少滿足其一：
-  - `Outline.enabled == true`，或
-  - fallback highlight 生效（例如 MaterialPropertyBlock 或材質顏色可觀測變化）
+### PL-1 人物可移動轉頭且互動（Unity Adapter）
+Phase 1 最小驗收
+- 玩家生成後不懸空、可落地
+- 可轉頭（MouseLook）且可互動（E）
 
-### PL-1 人物能移動/轉頭且互動（Unity Adapter）
+## Seed 與「無限生成」的測試策略
+- 測試不做 layout 一一比對，而是驗證 invariants 不被破壞。
+- 仍建議支援 seed（或可注入 RNG），用途：
+  - fuzz 測試時可重現（輸出 seed + 參數）
+  - 減少 flaky：固定少數 seeds + 額外隨機 seeds
 
-Phase 1（單房）最小可驗收：
-- 玩家生成後受重力影響會往下落並落到地面（不懸空、不卡住）
-- 玩家視線方向改變會影響 Raycast 命中目標
-- 可觸發互動（撿 key、開門）
+## Phase 2（只換美術不改布局：Reskin / ArtSet）
+目標：同一份 `RoomBlueprint`（容器關係不變），只切換 Theme/ArtSet 就能重建外觀（同房間可不停輪換不同美術）。
 
-## Seed 與無限生成（測試策略）
+### 設計拆分（建議）
+- **Generation Theme（RoomTheme）**：影響「生成什麼、怎麼放」（權重、規則、偏好）。
+- **Visual Theme（ArtSet）**：影響「長什麼樣」（itemID → prefab/parts/material），不改動 Blueprint 的容器關係。
 
-- 測試不做「layout 一一比對」，而是用 invariants 驗證規則不被違反。
-- 仍建議支援 seed/可注入 RNG（或至少能記錄 seed），用途是：
-  - fuzz 測試發現違規時可重現（輸出 seed + 參數）
-  - 避免 flaky：固定 seeds 做回歸 + 額外隨機 seeds 做壓力測試
+### VT-1 同一 blueprint 可 reskin
+Given
+- 一份已生成的 `RoomBlueprint bp`（single room）
+- 兩套以上的 `ArtSet`（例如 `Modern` 與 `SciFi`）
 
-## 測試位置與執行
+When
+- 使用相同 `bp` rebuild 場景，但套用不同 `ArtSet`
 
+Then（invariants）
+- 容器關係不變（同 `instanceID` 的拓撲、parent/child 關係不變）
+- 位置/旋轉/尺寸語意不變（仍需滿足 Phase 1 的 snapping/door/interaction invariants）
+- 允許外觀不同（mesh/material/prefab 不同）
+
+### VT-2 覆寫優先序（避免被整套 Theme 蓋掉）
+建議優先序（高 → 低）：
+1. 明確的 item override（例如某個 itemID 的強制指定）
+2. `ArtSet` mapping（整套風格）
+3. `ItemDefinition.prefab` 預設
+4. fallback primitive（保底可見）
+
+### VT-3 Slot-based 資產契約（以 DoorSystem 為例）
+DoorSystem 最低契約（美術照此交付即可替換）：
+- 必須能定位：
+  - `Frame_Left` / `Frame_Right` / `Frame_Top`
+  - `DoorHinge`（旋轉軸）
+  - `Door`（門片）
+- pivot 規則：
+  - `DoorHinge` pivot 在鉸鏈邊（避免門從中間旋轉）
+- 尺寸規則：
+  - 允許 Adapter 端依 wall opening 自動調整 frame/door 的寬高與厚度
+
+### VT-4 使用者更換美術的操作（驗收）
+- 可「整套換」：只切換 `ArtSet`，並 rebuild（不需要改 Core / Rules）
+- 可「單項換」：只覆寫某一個 itemID 的 prefab/parts，不影響其他 item
+
+## 測試位置與入口
 - 規格：`Docs/SPEC.md`
 - EditMode tests：`Assets/Tests/Editor`
 - PlayMode tests：`Assets/Tests/PlayMode`
-
-Unity Editor：
-- `Window > General > Test Runner`
-  - `EditMode`：跑 `RoomBuilder2.EditModeTests`
-  - `PlayMode`：跑 `RoomBuilder2.PlayModeTests`
-
-一鍵執行（Editor menu）：
-- `Tools > Tests > Run All (Edit + Play) and Export Reports`
-- `Tools > Tests > Run All (Edit + Play + Player) and Export Reports`（會建置並執行 Player tests，較慢）
+- Unity Test Runner：`Window > General > Test Runner`
+- 一鍵執行（Editor menu）：
+  - `Tools > Tests > Run All (Edit + Play) and Export Reports`
+  - `Tools > Tests > Run All (Edit + Play + Player) and Export Reports`
