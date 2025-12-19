@@ -37,6 +37,7 @@ ExportedObj/
 # Windows specific
 Thumbs.db
 Desktop.ini
+*.lnk
 
 # IDE specific
 *.sln
@@ -69,3 +70,6 @@ crashlytics-build.properties
 # Test report outputs (created by Tools/Tests/AllTestsRunner)
 /TestReports/
 TestResults_*.xml
+
+# Misc local folders
+/My project/
