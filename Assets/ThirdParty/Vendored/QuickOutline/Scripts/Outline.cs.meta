@@ -16,5 +16,5 @@ AssetOrigin:
   productId: 115488
   packageName: Quick Outline
   packageVersion: 1.1
-  assetPath: Assets/QuickOutline/Scripts/Outline.cs
+  assetPath: Assets/ThirdParty/Vendored/QuickOutline/Scripts/Outline.cs
   uploadId: 485303

@@ -44,8 +44,8 @@
 
 ## Troubleshooting
 - QuickOutline 材質位置：
-  - `Assets/QuickOutline/Resources/Materials/OutlineMask.mat`
-  - `Assets/QuickOutline/Resources/Materials/OutlineFill.mat`
+  - `Assets/ThirdParty/Vendored/QuickOutline/Resources/Materials/OutlineMask.mat`
+  - `Assets/ThirdParty/Vendored/QuickOutline/Resources/Materials/OutlineFill.mat`
 - 測試工具卡住（顯示 A test run is already active）：
   - `Tools/Tests/Force Clear Active Run Lock (Stuck Fix)`
   - 或 `Tools/Tests/Restore Last Captured Scenes Now` 強制回復原本場景
@@ -62,4 +62,3 @@
 - Physics snapping 修正：floor 高度只以 floor 自身 bounds 計算，避免把家具算進去導致整批浮空；子物件（杯子）可正確落在桌面上
 - DoorController 修正：方向決策固定、pivot offset 不會累積，避免開門翻轉/越轉越歪
 - Focus highlight 強化：outline 缺材質時用 fallback highlight 確保可視
-

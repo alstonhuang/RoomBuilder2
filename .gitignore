@@ -63,6 +63,16 @@ Desktop.ini
 *.apk
 *.aab
 *.unitypackage
+*.blend1
+*.blend2
+*.blend@*
+
+# Third-party assets:
+# - Vendored: committed (code deps like QuickOutline)
+# - Downloaded: not committed (large art packs / external content)
+/Assets/ThirdParty/Downloaded/
+/Assets/ThirdParty/Downloaded.meta
+/Assets/ThirdParty/Downloaded/**/*.meta
 
 # Crashlytics generated file
 crashlytics-build.properties
