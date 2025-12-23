@@ -2,16 +2,22 @@ Shader "Hidden/QuickOutline/OutlineFill" {
     Properties {
         _OutlineWidth ("Outline Width", Float) = 2.0
         _OutlineColor ("Outline Color", Color) = (1,1,1,1)
+        _ZTest ("ZTest", Float) = 4
     }
     SubShader {
         Tags { "RenderType"="Opaque" }
         Cull Front
         ZWrite Off
-        ZTest LEqual
+        ZTest [_ZTest]
         Blend SrcAlpha OneMinusSrcAlpha
 
         Pass {
             Name "OutlineFill"
+            Stencil {
+                Ref 1
+                Comp NotEqual
+                Pass Keep
+            }
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag

@@ -56,3 +56,13 @@
 - Door system: `Assets/Scripts/Adapters/Unity/DoorController.cs`, `Assets/Scripts/Adapters/Unity/DoorArtLoader.cs`
 - Test runner: `Assets/Scripts/Editor/AllTestsRunner.cs`
 - PlayMode specs: `Assets/Tests/PlayMode/SceneGenerationSpecsTests.cs`, `Assets/Tests/PlayMode/PlayerInteractionSpecsTests.cs`
+
+## ThirdParty Art (跨電腦注意)
+
+- 下載型第三方資產請放在 `Assets/ThirdParty/Downloaded/`（此資料夾被 `.gitignore` 排除，不會被 push）。
+- **重要：不要把引用 `Downloaded` 內容的 prefab commit 上去**（例如 `Assets/Prefabs/Key.prefab` 若已套用 Rust Key 外觀），否則別台電腦 pull 後會缺檔。
+- 目前策略：repo 內永遠保留可運作的 fallback（cube）版本；想在另一台電腦看到同樣美術，請把第三方資產「另外同步」到那台電腦。
+- 建議同步方式（擇一）：
+  - **直接複製整個 `Assets/ThirdParty/Downloaded/`（包含 `.meta`）** 到另一台電腦同一路徑（Unity 依賴 GUID，`.meta` 很關鍵）。
+  - 或用 Unity 的 `Assets > Export Package...` 把 Rust Key 資產匯出成 `.unitypackage`，到另一台電腦 `Import Package`（也會保留 GUID）。
+- 安裝 Key 美術：在 Unity 執行 `Tools/Art/Install Rust Key Art (ThirdParty Downloaded)`（如果沒裝第三方包，仍會使用 fallback key，不會壞）。

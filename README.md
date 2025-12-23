@@ -39,6 +39,14 @@
 - 報告輸出：預設 `TestReports/`
 - 建議開啟：`Tools/Tests/Run In Temporary Scene (Avoid Modifying Current Scene)`（避免測試污染你正在編輯的場景）
 
+## 第三方美術（跨電腦同步）
+- 下載型第三方資產請放在 `Assets/ThirdParty/Downloaded/`（此資料夾被 `.gitignore` 排除，不會被 push）。
+- **不要把引用 `Downloaded` 內容的 prefab commit 上去**（例如本機 `Assets/Prefabs/Key.prefab` 套用 Rust Key 外觀後會引用被忽略的資產，推上去別台會缺檔）。
+- 想讓兩台電腦都能看到同樣美術（例如 Rust Key）：
+  - 直接複製整個 `Assets/ThirdParty/Downloaded/`（包含 `.meta`）到另一台電腦同一路徑，或
+  - 用 Unity `Export Package...` 匯出成 `.unitypackage`，到另一台 `Import Package`。
+- 安裝 Key 美術：`Tools/Art/Install Rust Key Art (ThirdParty Downloaded)`
+
 ## 操作手感
 - `MouseLook.mouseSensitivity` 預設 `900`（可在 `Assets/Prefabs/Player.prefab` 調整）
 

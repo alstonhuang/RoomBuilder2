@@ -16,6 +16,9 @@ using UnityEngine;
 public class Outline : MonoBehaviour {
   private static HashSet<Mesh> registeredMeshes = new HashSet<Mesh>();
 
+  private const string MaskShaderName = "Hidden/QuickOutline/OutlineMask";
+  private const string FillShaderName = "Hidden/QuickOutline/OutlineFill";
+
   public enum Mode {
     OutlineAll,
     OutlineVisible,
@@ -80,6 +83,14 @@ public class Outline : MonoBehaviour {
 
   private bool needsUpdate;
 
+  private static bool IsOutlineMaterial(Material material) {
+    if (material == null) return false;
+    var shader = material.shader;
+    if (shader == null) return false;
+    var name = shader.name;
+    return name == MaskShaderName || name == FillShaderName;
+  }
+
   void Awake() {
 
     // Cache renderers
@@ -125,12 +136,11 @@ public class Outline : MonoBehaviour {
     }
     foreach (var renderer in renderers) {
 
-      // Append outline shaders
-      var materials = renderer.sharedMaterials.ToList();
-
+      // Ensure we don't accumulate duplicate outline materials across enable/disable cycles.
+      var materials = renderer.materials.ToList();
+      materials.RemoveAll(IsOutlineMaterial);
       materials.Add(outlineMaskMaterial);
       materials.Add(outlineFillMaterial);
-
       renderer.materials = materials.ToArray();
     }
   }
@@ -170,12 +180,9 @@ public class Outline : MonoBehaviour {
     }
     foreach (var renderer in renderers) {
 
-      // Remove outline shaders
-      var materials = renderer.sharedMaterials.ToList();
-
-      materials.Remove(outlineMaskMaterial);
-      materials.Remove(outlineFillMaterial);
-
+      // Remove any outline materials by shader (covers duplicated/instanced cases).
+      var materials = renderer.materials.ToList();
+      materials.RemoveAll(IsOutlineMaterial);
       renderer.materials = materials.ToArray();
     }
   }
