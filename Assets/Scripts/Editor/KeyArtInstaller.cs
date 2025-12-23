@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace MyGame.EditorTools
@@ -164,6 +163,10 @@ namespace MyGame.EditorTools
                 modelInstance.transform.localRotation = Quaternion.identity;
                 modelInstance.transform.localScale = Vector3.one;
 
+                // If this art pack uses Built-in pipeline materials (Standard/Autodesk), upgrade them to URP Lit
+                // so the mesh doesn't render magenta in URP projects.
+                UpgradeMaterialsToUrpIfNeeded(modelInstance);
+
                 // Auto-fit the model to roughly match the previous placeholder scale convention:
                 // the old sphere mesh has ~1 unit local bounds and the prefab root carries the final scale (e.g., 0.3).
                 // We scale the model so its local max dimension becomes ~1 unit.
@@ -240,6 +243,90 @@ namespace MyGame.EditorTools
             foreach (var c in modelInstance.GetComponentsInChildren<Collider>(true))
             {
                 c.enabled = false;
+            }
+        }
+
+        private static void UpgradeMaterialsToUrpIfNeeded(GameObject modelInstance)
+        {
+            if (modelInstance == null) return;
+
+            var renderers = modelInstance.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                var mats = r.sharedMaterials;
+                if (mats == null) continue;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var m = mats[i];
+                    if (m == null) continue;
+                    TryUpgradeMaterialToUrpLit(m);
+                }
+            }
+        }
+
+        private static void TryUpgradeMaterialToUrpLit(Material mat)
+        {
+            if (mat == null) return;
+            if (mat.shader == null) return;
+
+            string shaderName = mat.shader.name ?? string.Empty;
+            bool looksBuiltin =
+                shaderName.Equals("Standard", StringComparison.OrdinalIgnoreCase) ||
+                shaderName.IndexOf("Autodesk", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            if (!looksBuiltin) return;
+
+            var urpLit = Shader.Find("Universal Render Pipeline/Lit");
+            if (urpLit == null) return;
+
+            // Capture common Standard properties before switching shader.
+            Texture mainTex = mat.HasProperty("_MainTex") ? mat.GetTexture("_MainTex") : null;
+            Color color = mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white;
+            Texture normalTex = mat.HasProperty("_BumpMap") ? mat.GetTexture("_BumpMap") : null;
+            float bumpScale = mat.HasProperty("_BumpScale") ? mat.GetFloat("_BumpScale") : 1f;
+            Texture metallicTex = mat.HasProperty("_MetallicGlossMap") ? mat.GetTexture("_MetallicGlossMap") : null;
+            float metallic = mat.HasProperty("_Metallic") ? mat.GetFloat("_Metallic") : 0f;
+            float glossiness = mat.HasProperty("_Glossiness") ? mat.GetFloat("_Glossiness") : 0.5f;
+
+            mat.shader = urpLit;
+
+            // Map to URP Lit property names.
+            if (mainTex != null && mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", mainTex);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+
+            if (normalTex != null && mat.HasProperty("_BumpMap"))
+            {
+                EnsureTextureIsNormalMap(normalTex);
+                mat.SetTexture("_BumpMap", normalTex);
+                if (mat.HasProperty("_BumpScale")) mat.SetFloat("_BumpScale", bumpScale);
+                mat.EnableKeyword("_NORMALMAP");
+            }
+
+            if (metallicTex != null && mat.HasProperty("_MetallicGlossMap"))
+            {
+                mat.SetTexture("_MetallicGlossMap", metallicTex);
+                mat.EnableKeyword("_METALLICGLOSSMAP");
+            }
+            if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", metallic);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", glossiness);
+
+            EditorUtility.SetDirty(mat);
+        }
+
+        private static void EnsureTextureIsNormalMap(Texture tex)
+        {
+            if (tex == null) return;
+            string path = AssetDatabase.GetAssetPath(tex);
+            if (string.IsNullOrEmpty(path)) return;
+
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null) return;
+
+            if (importer.textureType != TextureImporterType.NormalMap)
+            {
+                importer.textureType = TextureImporterType.NormalMap;
+                importer.SaveAndReimport();
             }
         }
 
