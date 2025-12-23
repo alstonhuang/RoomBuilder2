@@ -11,10 +11,14 @@ namespace MyGame.EditorTools
         private const string DefaultModelPath = "Assets/ThirdParty/Downloaded/UnityAssets/goldkey.blend";
         private const string DefaultRustKeyPrefabPath = "Assets/ThirdParty/Downloaded/Rust Key/Prefabs/rust_key.prefab";
         private const string KeyPrefabPath = "Assets/Prefabs/Key.prefab";
-        private const string ArtRootName = "Art";
 
-        [MenuItem("Tools/Art/Install Rust Key Art (ThirdParty Downloaded)")]
-        public static void InstallRustKeyArt()
+        // Private art repo convention: keep overrides under Downloaded + Resources so runtime can load them via Resources.Load.
+        private const string KeyArtOverrideResourcePath = "RoomBuilder2Overrides/KeyArt";
+        private const string KeyArtOverridePrefabPath =
+            "Assets/ThirdParty/Downloaded/RoomBuilder2Art/Resources/RoomBuilder2Overrides/KeyArt.prefab";
+
+        [MenuItem("Tools/Art/Build Key Art Override (Rust Key, ThirdParty Downloaded)")]
+        public static void BuildRustKeyArtOverride()
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(DefaultRustKeyPrefabPath);
             if (prefab == null)
@@ -26,11 +30,11 @@ namespace MyGame.EditorTools
                 return;
             }
 
-            InstallKeyArtFromModel(prefab, DefaultRustKeyPrefabPath);
+            BuildKeyArtOverrideFromModel(prefab, DefaultRustKeyPrefabPath);
         }
 
-        [MenuItem("Tools/Art/Install Selected Prefab As Key Art")]
-        public static void InstallSelectedPrefabAsKeyArt()
+        [MenuItem("Tools/Art/Build Key Art Override (From Selected Prefab)")]
+        public static void BuildSelectedPrefabAsKeyArtOverride()
         {
             var selected = Selection.activeObject as GameObject;
             if (selected == null)
@@ -52,11 +56,11 @@ namespace MyGame.EditorTools
                 return;
             }
 
-            InstallKeyArtFromModel(selected, selectedPath);
+            BuildKeyArtOverrideFromModel(selected, selectedPath);
         }
 
-        [MenuItem("Tools/Art/Install Gold Key Art (ThirdParty Downloaded)")]
-        public static void InstallGoldKeyArt()
+        [MenuItem("Tools/Art/Build Key Art Override (Gold Key, ThirdParty Downloaded)")]
+        public static void BuildGoldKeyArtOverride()
         {
             var model = LoadGoldKeyModelAsset();
             if (model == null)
@@ -72,7 +76,29 @@ namespace MyGame.EditorTools
                 return;
             }
 
-            InstallKeyArtFromModel(model, AssetDatabase.GetAssetPath(model));
+            BuildKeyArtOverrideFromModel(model, AssetDatabase.GetAssetPath(model));
+        }
+
+        [MenuItem("Tools/Art/Validate Key Art Override")]
+        public static void ValidateKeyArtOverride()
+        {
+            var prefab = Resources.Load<GameObject>(KeyArtOverrideResourcePath);
+            if (prefab == null)
+            {
+                EditorUtility.DisplayDialog(
+                    "Key Art Override Missing",
+                    "No key art override found.\n\n" +
+                    $"Expected a prefab at:\n{KeyArtOverridePrefabPath}\n\n" +
+                    "Tip:\n- If you have the private art repo, clone/sync it into Assets/ThirdParty/Downloaded/RoomBuilder2Art/\n" +
+                    "- Or run one of the Build Key Art Override tools under Tools/Art/",
+                    "OK");
+                return;
+            }
+
+            EditorUtility.DisplayDialog(
+                "Key Art Override OK",
+                $"Resources.Load(\"{KeyArtOverrideResourcePath}\") resolved to:\n{AssetDatabase.GetAssetPath(prefab)}",
+                "OK");
         }
 
         [MenuItem("Tools/Art/Validate Key Prefab")]
@@ -132,33 +158,24 @@ namespace MyGame.EditorTools
             return null;
         }
 
-        private static void InstallKeyArtFromModel(GameObject model, string modelPathForLog)
+        private static void BuildKeyArtOverrideFromModel(GameObject model, string modelPathForLog)
         {
-            if (!File.Exists(KeyPrefabPath))
-            {
-                EditorUtility.DisplayDialog("Key Prefab Missing", $"Cannot find '{KeyPrefabPath}'.", "OK");
-                return;
-            }
-
             if (model == null)
             {
                 EditorUtility.DisplayDialog("Model Missing", "Model is null.", "OK");
                 return;
             }
 
-            string prefabFullPath = Path.GetFullPath(KeyPrefabPath);
-            var root = PrefabUtility.LoadPrefabContents(prefabFullPath);
+            EnsureAssetFolderExists(Path.GetDirectoryName(KeyArtOverridePrefabPath)?.Replace("\\", "/"));
+
+            var root = new GameObject("KeyArtOverride");
             try
             {
-                var artRoot = FindOrCreateChild(root.transform, ArtRootName);
-                ClearChildren(artRoot);
-
-                // Instantiate the model as a child under Art.
                 GameObject modelInstance = (GameObject)PrefabUtility.InstantiatePrefab(model);
                 if (modelInstance == null) modelInstance = UnityEngine.Object.Instantiate(model);
 
                 modelInstance.name = model.name;
-                modelInstance.transform.SetParent(artRoot, worldPositionStays: false);
+                modelInstance.transform.SetParent(root.transform, worldPositionStays: false);
                 modelInstance.transform.localPosition = Vector3.zero;
                 modelInstance.transform.localRotation = Quaternion.identity;
                 modelInstance.transform.localScale = Vector3.one;
@@ -180,60 +197,34 @@ namespace MyGame.EditorTools
                     }
                 }
 
-                // Hide the old placeholder sphere mesh on the root, if present.
-                var rootRenderer = root.GetComponent<Renderer>();
-                if (rootRenderer != null) rootRenderer.enabled = false;
-
-                // Ensure collider exists and fits the visible renderers.
                 DisableChildColliders(modelInstance);
-                EnsureCollider(root);
 
-                PrefabUtility.SaveAsPrefabAsset(root, KeyPrefabPath);
+                PrefabUtility.SaveAsPrefabAsset(root, KeyArtOverridePrefabPath);
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
             }
             finally
             {
-                PrefabUtility.UnloadPrefabContents(root);
+                UnityEngine.Object.DestroyImmediate(root);
             }
 
-            Debug.Log($"[KeyArtInstaller] Installed key art into '{KeyPrefabPath}' using model '{modelPathForLog}'.");
+            Debug.Log($"[KeyArtInstaller] Built key art override at '{KeyArtOverridePrefabPath}' using model '{modelPathForLog}'.");
         }
 
-        private static Transform FindOrCreateChild(Transform parent, string childName)
+        private static void EnsureAssetFolderExists(string folderPath)
         {
-            var existing = parent.Find(childName);
-            if (existing != null) return existing;
+            if (string.IsNullOrEmpty(folderPath)) return;
+            folderPath = folderPath.Replace("\\", "/");
+            if (folderPath == "Assets") return;
+            if (AssetDatabase.IsValidFolder(folderPath)) return;
 
-            var go = new GameObject(childName);
-            go.transform.SetParent(parent, worldPositionStays: false);
-            go.transform.localPosition = Vector3.zero;
-            go.transform.localRotation = Quaternion.identity;
-            go.transform.localScale = Vector3.one;
-            return go.transform;
-        }
+            string parent = Path.GetDirectoryName(folderPath)?.Replace("\\", "/");
+            string name = Path.GetFileName(folderPath);
+            EnsureAssetFolderExists(parent);
 
-        private static void ClearChildren(Transform t)
-        {
-            for (int i = t.childCount - 1; i >= 0; i--)
+            if (!AssetDatabase.IsValidFolder(folderPath))
             {
-                UnityEngine.Object.DestroyImmediate(t.GetChild(i).gameObject);
-            }
-        }
-
-        private static void EnsureCollider(GameObject root)
-        {
-            // Keep existing collider type if present, but refit bounds.
-            var col = root.GetComponent<Collider>();
-            if (col == null) col = root.AddComponent<BoxCollider>();
-
-            if (col is BoxCollider box)
-            {
-                if (TryComputeLocalBounds(root.transform, out var localBounds))
-                {
-                    box.center = localBounds.center;
-                    box.size = localBounds.size;
-                }
+                AssetDatabase.CreateFolder(parent, name);
             }
         }
 

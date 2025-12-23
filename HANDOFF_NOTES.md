@@ -60,9 +60,11 @@
 ## ThirdParty Art (跨電腦注意)
 
 - 下載型第三方資產請放在 `Assets/ThirdParty/Downloaded/`（此資料夾被 `.gitignore` 排除，不會被 push）。
-- **重要：不要把引用 `Downloaded` 內容的 prefab commit 上去**（例如 `Assets/Prefabs/Key.prefab` 若已套用 Rust Key 外觀），否則別台電腦 pull 後會缺檔。
-- 目前策略：repo 內永遠保留可運作的 fallback（cube）版本；想在另一台電腦看到同樣美術，請把第三方資產「另外同步」到那台電腦。
-- 建議同步方式（擇一）：
-  - **直接複製整個 `Assets/ThirdParty/Downloaded/`（包含 `.meta`）** 到另一台電腦同一路徑（Unity 依賴 GUID，`.meta` 很關鍵）。
-  - 或用 Unity 的 `Assets > Export Package...` 把 Rust Key 資產匯出成 `.unitypackage`，到另一台電腦 `Import Package`（也會保留 GUID）。
-- 安裝 Key 美術：在 Unity 執行 `Tools/Art/Install Rust Key Art (ThirdParty Downloaded)`（如果沒裝第三方包，仍會使用 fallback key，不會壞）。
+- **重要：不要把引用 `Downloaded` 內容的 prefab/scene commit 上去**，否則別台電腦 pull 後會缺檔。
+- 推薦策略（Code 公開 / Art 私有）：
+  - 第三方美術放在「私有 Art repo」，每台電腦把它同步到專案內的 `Assets/ThirdParty/Downloaded/`（包含 `.meta`）。
+  - code repo 內永遠保留可運作的 fallback（sphere）版本；私有 repo 存在時才自動替換外觀。
+- Key 美術覆蓋（不修改 `Assets/Prefabs/Key.prefab`）：
+  - 私有 repo 放置：`Assets/ThirdParty/Downloaded/RoomBuilder2Art/Resources/RoomBuilder2Overrides/KeyArt.prefab`
+  - 執行時 `KeyController` 會 `Resources.Load("RoomBuilder2Overrides/KeyArt")`，存在就取代 fallback 外觀。
+  - 產生/更新 override：`Tools/Art/Build Key Art Override (...)`

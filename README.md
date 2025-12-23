@@ -41,11 +41,12 @@
 
 ## 第三方美術（跨電腦同步）
 - 下載型第三方資產請放在 `Assets/ThirdParty/Downloaded/`（此資料夾被 `.gitignore` 排除，不會被 push）。
-- **不要把引用 `Downloaded` 內容的 prefab commit 上去**（例如本機 `Assets/Prefabs/Key.prefab` 套用 Rust Key 外觀後會引用被忽略的資產，推上去別台會缺檔）。
-- 想讓兩台電腦都能看到同樣美術（例如 Rust Key）：
-  - 直接複製整個 `Assets/ThirdParty/Downloaded/`（包含 `.meta`）到另一台電腦同一路徑，或
-  - 用 Unity `Export Package...` 匯出成 `.unitypackage`，到另一台 `Import Package`。
-- 安裝 Key 美術：`Tools/Art/Install Rust Key Art (ThirdParty Downloaded)`
+- 建議做法（Code repo 公開 / Art 私有）：把第三方美術放在「私有 Art repo」，每台電腦把它同步到專案內的 `Assets/ThirdParty/Downloaded/`（包含 `.meta`，GUID 才會一致）。
+- Key 美術覆蓋（推薦，不會污染 `git status`）：
+  - 私有 Art repo 內提供：`Assets/ThirdParty/Downloaded/RoomBuilder2Art/Resources/RoomBuilder2Overrides/KeyArt.prefab`
+  - 遊戲執行時 `KeyController` 會自動 `Resources.Load("RoomBuilder2Overrides/KeyArt")`，存在就取代 fallback（sphere）外觀。
+  - 產生/更新 override：`Tools/Art/Build Key Art Override (...)`
+- 仍請避免把引用 `Downloaded` 的 prefab/scene commit 上去（別台 pull 會缺檔）。
 
 ## 操作手感
 - `MouseLook.mouseSensitivity` 預設 `900`（可在 `Assets/Prefabs/Player.prefab` 調整）
