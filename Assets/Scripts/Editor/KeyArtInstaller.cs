@@ -9,7 +9,7 @@ namespace MyGame.EditorTools
     public static class KeyArtInstaller
     {
         private const string KeyPrefabPath = "Assets/Prefabs/Key.prefab";
-        private const string OverridesFolder =
+        internal const string OverridesFolderPath =
             "Assets/ThirdParty/Downloaded/RoomBuilder2Art/Resources/RoomBuilder2Overrides";
 
         [MenuItem("Tools/Art/Build Art Override Prefab...")]
@@ -18,31 +18,25 @@ namespace MyGame.EditorTools
             var selected = Selection.activeObject as GameObject;
             if (selected == null)
             {
-                EditorUtility.DisplayDialog(
-                    "Select a Prefab",
-                    "Select a prefab/model asset (Project window), then run this command.",
-                    "OK");
+                ArtOverrideBuilderWindow.Open();
                 return;
             }
 
             string selectedPath = AssetDatabase.GetAssetPath(selected);
             if (string.IsNullOrEmpty(selectedPath) || !PrefabUtility.IsPartOfPrefabAsset(selected))
             {
-                EditorUtility.DisplayDialog(
-                    "Invalid Selection",
-                    "Selected object is not a prefab/model asset. Please select a prefab/model asset in the Project window.",
-                    "OK");
+                ArtOverrideBuilderWindow.Open();
                 return;
             }
 
-            EnsureAssetFolderExists(OverridesFolder);
+            EnsureAssetFolderExists(OverridesFolderPath);
 
             string outPath = EditorUtility.SaveFilePanelInProject(
                 "Save Art Override Prefab",
                 selected.name,
                 "prefab",
                 "Save a prefab under a Resources folder so runtime can load it via Resources.Load(...)",
-                OverridesFolder);
+                OverridesFolderPath);
 
             if (string.IsNullOrEmpty(outPath)) return;
 
@@ -52,7 +46,7 @@ namespace MyGame.EditorTools
                 EditorUtility.DisplayDialog(
                     "Invalid Output Path",
                     "Art override prefab must be saved under a 'Resources' folder.\n\n" +
-                    $"Recommended:\n{OverridesFolder}",
+                    $"Recommended:\n{OverridesFolderPath}",
                     "OK");
                 return;
             }
@@ -189,6 +183,16 @@ namespace MyGame.EditorTools
             }
 
             Debug.Log($"[KeyArtInstaller] Built art override at '{outPrefabAssetPath}' using model '{modelPathForLog}'.");
+        }
+
+        public static void BuildArtOverrideFromModelPublic(GameObject model, string modelPathForLog, string outPrefabAssetPath)
+        {
+            BuildArtOverrideFromModel(model, modelPathForLog, outPrefabAssetPath);
+        }
+
+        public static void EnsureAssetFolderExistsPublic(string folderPath)
+        {
+            EnsureAssetFolderExists(folderPath);
         }
 
         private static void EnsureAssetFolderExists(string folderPath)
@@ -351,4 +355,3 @@ namespace MyGame.EditorTools
         }
     }
 }
-
