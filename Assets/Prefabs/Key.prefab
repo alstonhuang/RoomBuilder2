@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 6638635210804341373}
   - component: {fileID: 3031950090826471956}
   - component: {fileID: -2535516451235867868}
+  - component: {fileID: 9123456789012345678}
   - component: {fileID: -6437936245153733005}
   - component: {fileID: 5801234567890123456}
   m_Layer: 0
@@ -124,6 +125,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   debugSnap: 1
+--- !u!114 &9123456789012345678
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1113684966663954328}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a1b2c3d4e5f60718293a4b5c6d7e8f90, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  overrideResourcePath: RoomBuilder2Overrides/KeyArt
+  artRootName: Art
+  disablePlaceholderRendererWhenOverridePresent: 1
+  disableCollidersOnOverride: 1
+  clearArtRootChildren: 1
+  refitRootColliderToOverrideBounds: 1
 --- !u!114 &-6437936245153733005
 MonoBehaviour:
   m_ObjectHideFlags: 0

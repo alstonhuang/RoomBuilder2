@@ -8,40 +8,19 @@ namespace MyGame.EditorTools
 {
     public static class KeyArtInstaller
     {
-        private const string DefaultModelPath = "Assets/ThirdParty/Downloaded/UnityAssets/goldkey.blend";
-        private const string DefaultRustKeyPrefabPath = "Assets/ThirdParty/Downloaded/Rust Key/Prefabs/rust_key.prefab";
         private const string KeyPrefabPath = "Assets/Prefabs/Key.prefab";
+        private const string OverridesFolder =
+            "Assets/ThirdParty/Downloaded/RoomBuilder2Art/Resources/RoomBuilder2Overrides";
 
-        // Private art repo convention: keep overrides under Downloaded + Resources so runtime can load them via Resources.Load.
-        private const string KeyArtOverrideResourcePath = "RoomBuilder2Overrides/KeyArt";
-        private const string KeyArtOverridePrefabPath =
-            "Assets/ThirdParty/Downloaded/RoomBuilder2Art/Resources/RoomBuilder2Overrides/KeyArt.prefab";
-
-        [MenuItem("Tools/Art/Build Key Art Override (Rust Key, ThirdParty Downloaded)")]
-        public static void BuildRustKeyArtOverride()
-        {
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(DefaultRustKeyPrefabPath);
-            if (prefab == null)
-            {
-                EditorUtility.DisplayDialog(
-                    "Rust Key Prefab Missing",
-                    $"Cannot load '{DefaultRustKeyPrefabPath}'.\n\nMake sure the pack is present under Assets/ThirdParty/Downloaded/.",
-                    "OK");
-                return;
-            }
-
-            BuildKeyArtOverrideFromModel(prefab, DefaultRustKeyPrefabPath);
-        }
-
-        [MenuItem("Tools/Art/Build Key Art Override (From Selected Prefab)")]
-        public static void BuildSelectedPrefabAsKeyArtOverride()
+        [MenuItem("Tools/Art/Build Art Override Prefab...")]
+        public static void BuildArtOverridePrefabFromSelection()
         {
             var selected = Selection.activeObject as GameObject;
             if (selected == null)
             {
                 EditorUtility.DisplayDialog(
                     "Select a Prefab",
-                    "Select a prefab asset (Project window), then run this command.\n\nExample:\nAssets/ThirdParty/Downloaded/Rust Key/Prefabs/rust_key.prefab",
+                    "Select a prefab/model asset (Project window), then run this command.",
                     "OK");
                 return;
             }
@@ -51,53 +30,71 @@ namespace MyGame.EditorTools
             {
                 EditorUtility.DisplayDialog(
                     "Invalid Selection",
-                    "Selected object is not a prefab asset. Please select a prefab in the Project window.",
+                    "Selected object is not a prefab/model asset. Please select a prefab/model asset in the Project window.",
                     "OK");
                 return;
             }
 
-            BuildKeyArtOverrideFromModel(selected, selectedPath);
-        }
+            EnsureAssetFolderExists(OverridesFolder);
 
-        [MenuItem("Tools/Art/Build Key Art Override (Gold Key, ThirdParty Downloaded)")]
-        public static void BuildGoldKeyArtOverride()
-        {
-            var model = LoadGoldKeyModelAsset();
-            if (model == null)
+            string outPath = EditorUtility.SaveFilePanelInProject(
+                "Save Art Override Prefab",
+                selected.name,
+                "prefab",
+                "Save a prefab under a Resources folder so runtime can load it via Resources.Load(...)",
+                OverridesFolder);
+
+            if (string.IsNullOrEmpty(outPath)) return;
+
+            string resourcePath = TryGetResourcesPath(outPath);
+            if (string.IsNullOrEmpty(resourcePath))
             {
                 EditorUtility.DisplayDialog(
-                    "Gold Key Model Missing",
-                    "Could not load a model asset for the gold key.\n\n" +
-                    "Expected one of:\n" +
-                    "- Assets/ThirdParty/Downloaded/UnityAssets/goldkey.blend (requires Blender installed for Unity to import)\n" +
-                    "- Assets/ThirdParty/Downloaded/UnityAssets/goldkey.fbx / goldkey.obj / goldkey.glb\n\n" +
-                    "If you only have a .blend and Unity can’t import it, open it in Blender and export FBX to the same folder.",
+                    "Invalid Output Path",
+                    "Art override prefab must be saved under a 'Resources' folder.\n\n" +
+                    $"Recommended:\n{OverridesFolder}",
                     "OK");
                 return;
             }
 
-            BuildKeyArtOverrideFromModel(model, AssetDatabase.GetAssetPath(model));
+            BuildArtOverrideFromModel(selected, selectedPath, outPath);
+            Debug.Log($"[KeyArtInstaller] Built art override '{outPath}' (Resources.Load(\"{resourcePath}\")).");
         }
 
-        [MenuItem("Tools/Art/Validate Key Art Override")]
-        public static void ValidateKeyArtOverride()
+        [MenuItem("Tools/Art/Validate Selected Art Override Prefab")]
+        public static void ValidateSelectedArtOverridePrefab()
         {
-            var prefab = Resources.Load<GameObject>(KeyArtOverrideResourcePath);
-            if (prefab == null)
+            var selected = Selection.activeObject as GameObject;
+            if (selected == null)
+            {
+                EditorUtility.DisplayDialog("Select a Prefab", "Select an override prefab in the Project window.", "OK");
+                return;
+            }
+
+            string path = AssetDatabase.GetAssetPath(selected);
+            if (string.IsNullOrEmpty(path) || !PrefabUtility.IsPartOfPrefabAsset(selected))
+            {
+                EditorUtility.DisplayDialog("Invalid Selection", "Selected object is not a prefab asset.", "OK");
+                return;
+            }
+
+            string resourcePath = TryGetResourcesPath(path);
+            if (string.IsNullOrEmpty(resourcePath))
             {
                 EditorUtility.DisplayDialog(
-                    "Key Art Override Missing",
-                    "No key art override found.\n\n" +
-                    $"Expected a prefab at:\n{KeyArtOverridePrefabPath}\n\n" +
-                    "Tip:\n- If you have the private art repo, clone/sync it into Assets/ThirdParty/Downloaded/RoomBuilder2Art/\n" +
-                    "- Or run one of the Build Key Art Override tools under Tools/Art/",
+                    "Not Under Resources",
+                    "This prefab is not under any 'Resources' folder, so runtime cannot load it via Resources.Load(...).",
                     "OK");
                 return;
             }
 
+            var resolved = Resources.Load<GameObject>(resourcePath);
+            bool ok = resolved == selected;
             EditorUtility.DisplayDialog(
-                "Key Art Override OK",
-                $"Resources.Load(\"{KeyArtOverrideResourcePath}\") resolved to:\n{AssetDatabase.GetAssetPath(prefab)}",
+                ok ? "Override OK" : "Override Warning",
+                ok
+                    ? $"Resources.Load(\"{resourcePath}\") resolves to:\n{path}"
+                    : $"Resources.Load(\"{resourcePath}\") resolves to a different asset.\n\nSelected:\n{path}\nResolved:\n{AssetDatabase.GetAssetPath(resolved)}",
                 "OK");
         }
 
@@ -115,8 +112,11 @@ namespace MyGame.EditorTools
 
             if (prefab.GetComponent<KeyController>() == null) issues.Add("Missing KeyController component.");
             if (prefab.GetComponent<Interactable>() == null) issues.Add("Missing Interactable component.");
-            if (prefab.GetComponentInChildren<Collider>(true) == null) issues.Add("Missing Collider (interaction raycasts need a collider).");
-            if (prefab.GetComponentInChildren<Renderer>(true) == null) issues.Add("Missing Renderer (should be visible or highlightable).");
+            if (prefab.GetComponent<ArtOverrideLoader>() == null) issues.Add("Missing ArtOverrideLoader component.");
+            if (prefab.GetComponentInChildren<Collider>(true) == null)
+                issues.Add("Missing Collider (interaction raycasts need a collider).");
+            if (prefab.GetComponentInChildren<Renderer>(true) == null)
+                issues.Add("Missing Renderer (should be visible or highlightable).");
 
             if (issues.Count == 0)
             {
@@ -128,37 +128,22 @@ namespace MyGame.EditorTools
             EditorUtility.DisplayDialog("Key Prefab Issues", msg, "OK");
         }
 
-        private static GameObject LoadGoldKeyModelAsset()
+        private static string TryGetResourcesPath(string assetPath)
         {
-            // Prefer .blend if present; Unity imports it via Blender.
-            var candidates = new[]
-            {
-                DefaultModelPath,
-                "Assets/ThirdParty/Downloaded/UnityAssets/goldkey.fbx",
-                "Assets/ThirdParty/Downloaded/UnityAssets/goldkey.obj",
-                "Assets/ThirdParty/Downloaded/UnityAssets/goldkey.glb",
-                "Assets/ThirdParty/Downloaded/UnityAssets/goldkey.gltf"
-            };
+            if (string.IsNullOrEmpty(assetPath)) return null;
+            assetPath = assetPath.Replace("\\", "/");
+            int idx = assetPath.LastIndexOf("/Resources/", StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return null;
 
-            foreach (var path in candidates)
+            string rel = assetPath.Substring(idx + "/Resources/".Length);
+            if (rel.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
             {
-                var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                if (asset != null) return asset;
+                rel = rel.Substring(0, rel.Length - ".prefab".Length);
             }
-
-            // Last resort: find any model whose filename starts with goldkey in that folder.
-            string[] guids = AssetDatabase.FindAssets("goldkey t:GameObject", new[] { "Assets/ThirdParty/Downloaded/UnityAssets" });
-            foreach (var guid in guids)
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                if (asset != null) return asset;
-            }
-
-            return null;
+            return rel;
         }
 
-        private static void BuildKeyArtOverrideFromModel(GameObject model, string modelPathForLog)
+        private static void BuildArtOverrideFromModel(GameObject model, string modelPathForLog, string outPrefabAssetPath)
         {
             if (model == null)
             {
@@ -166,9 +151,9 @@ namespace MyGame.EditorTools
                 return;
             }
 
-            EnsureAssetFolderExists(Path.GetDirectoryName(KeyArtOverridePrefabPath)?.Replace("\\", "/"));
+            EnsureAssetFolderExists(Path.GetDirectoryName(outPrefabAssetPath)?.Replace("\\", "/"));
 
-            var root = new GameObject("KeyArtOverride");
+            var root = new GameObject("ArtOverride");
             try
             {
                 GameObject modelInstance = (GameObject)PrefabUtility.InstantiatePrefab(model);
@@ -180,13 +165,8 @@ namespace MyGame.EditorTools
                 modelInstance.transform.localRotation = Quaternion.identity;
                 modelInstance.transform.localScale = Vector3.one;
 
-                // If this art pack uses Built-in pipeline materials (Standard/Autodesk), upgrade them to URP Lit
-                // so the mesh doesn't render magenta in URP projects.
                 UpgradeMaterialsToUrpIfNeeded(modelInstance);
 
-                // Auto-fit the model to roughly match the previous placeholder scale convention:
-                // the old sphere mesh has ~1 unit local bounds and the prefab root carries the final scale (e.g., 0.3).
-                // We scale the model so its local max dimension becomes ~1 unit.
                 if (TryComputeLocalBounds(modelInstance.transform, out var modelLocalBounds))
                 {
                     float maxDim = Mathf.Max(modelLocalBounds.size.x, modelLocalBounds.size.y, modelLocalBounds.size.z);
@@ -199,7 +179,7 @@ namespace MyGame.EditorTools
 
                 DisableChildColliders(modelInstance);
 
-                PrefabUtility.SaveAsPrefabAsset(root, KeyArtOverridePrefabPath);
+                PrefabUtility.SaveAsPrefabAsset(root, outPrefabAssetPath);
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
             }
@@ -208,7 +188,7 @@ namespace MyGame.EditorTools
                 UnityEngine.Object.DestroyImmediate(root);
             }
 
-            Debug.Log($"[KeyArtInstaller] Built key art override at '{KeyArtOverridePrefabPath}' using model '{modelPathForLog}'.");
+            Debug.Log($"[KeyArtInstaller] Built art override at '{outPrefabAssetPath}' using model '{modelPathForLog}'.");
         }
 
         private static void EnsureAssetFolderExists(string folderPath)
@@ -271,7 +251,6 @@ namespace MyGame.EditorTools
             var urpLit = Shader.Find("Universal Render Pipeline/Lit");
             if (urpLit == null) return;
 
-            // Capture common Standard properties before switching shader.
             Texture mainTex = mat.HasProperty("_MainTex") ? mat.GetTexture("_MainTex") : null;
             Color color = mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white;
             Texture normalTex = mat.HasProperty("_BumpMap") ? mat.GetTexture("_BumpMap") : null;
@@ -282,7 +261,6 @@ namespace MyGame.EditorTools
 
             mat.shader = urpLit;
 
-            // Map to URP Lit property names.
             if (mainTex != null && mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", mainTex);
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
 
@@ -330,7 +308,6 @@ namespace MyGame.EditorTools
             foreach (var r in renderers)
             {
                 if (r == null) continue;
-                // Skip disabled renderers (e.g., placeholder root mesh).
                 if (!r.enabled) continue;
 
                 var wb = r.bounds;
@@ -351,7 +328,6 @@ namespace MyGame.EditorTools
 
         private static Bounds WorldBoundsToLocal(Transform root, Bounds worldBounds)
         {
-            // Convert the 8 world corners into root-local space and encapsulate.
             Vector3 c = worldBounds.center;
             Vector3 e = worldBounds.extents;
             var corners = new[]
@@ -375,3 +351,4 @@ namespace MyGame.EditorTools
         }
     }
 }
+

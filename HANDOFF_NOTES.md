@@ -66,5 +66,5 @@
   - code repo 內永遠保留可運作的 fallback（sphere）版本；私有 repo 存在時才自動替換外觀。
 - Key 美術覆蓋（不修改 `Assets/Prefabs/Key.prefab`）：
   - 私有 repo 放置：`Assets/ThirdParty/Downloaded/RoomBuilder2Art/Resources/RoomBuilder2Overrides/KeyArt.prefab`
-  - 執行時 `KeyController` 會 `Resources.Load("RoomBuilder2Overrides/KeyArt")`，存在就取代 fallback 外觀。
-  - 產生/更新 override：`Tools/Art/Build Key Art Override (...)`
+  - 執行時 `ArtOverrideLoader` 會 `Resources.Load("RoomBuilder2Overrides/KeyArt")`，存在就取代 fallback 外觀。
+  - 產生/更新 override：選取任一 prefab/model 資產後，執行 `Tools/Art/Build Art Override Prefab...` 並存成 `KeyArt.prefab`
