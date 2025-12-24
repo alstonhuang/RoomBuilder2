@@ -12,6 +12,9 @@ namespace MyGame.Adapters.Unity
         public List<ItemDefinition> database;
         public List<RoomTheme> themeDatabase;
 
+        [Header("Optional Default Database (Resources)")]
+        public string resourcesItemDatabasePath = "RoomBuilder2/ItemDatabase";
+
         [Header("Room Settings")]
         public string themeToBuild = "LivingRoom";
         public Vector3 roomSize = new Vector3(10, 2, 10);
@@ -357,6 +360,21 @@ namespace MyGame.Adapters.Unity
         private Dictionary<string, ItemDefinition> BuildDefinitionMap()
         {
             var defMap = new Dictionary<string, ItemDefinition>();
+
+            if (!string.IsNullOrEmpty(resourcesItemDatabasePath))
+            {
+                var db = Resources.Load<ItemDatabaseAsset>(resourcesItemDatabasePath);
+                if (db != null && db.items != null)
+                {
+                    foreach (var d in db.items)
+                    {
+                        if (d == null) continue;
+                        if (string.IsNullOrEmpty(d.itemID)) continue;
+                        defMap[d.itemID] = d;
+                    }
+                }
+            }
+
             if (database == null) return defMap;
 
             foreach (var d in database)

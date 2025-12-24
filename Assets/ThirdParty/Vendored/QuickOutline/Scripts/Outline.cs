@@ -82,6 +82,8 @@ public class Outline : MonoBehaviour {
   private Material outlineFillMaterial;
 
   private bool needsUpdate;
+  private bool materialsApplied;
+  private bool loggedMissingOnce;
 
   private static bool IsOutlineMaterial(Material material) {
     if (material == null) return false;
@@ -96,44 +98,62 @@ public class Outline : MonoBehaviour {
     // Cache renderers
     renderers = GetComponentsInChildren<Renderer>();
 
-    // Instantiate outline materials (gracefully fall back to runtime-created materials)
-    var maskSrc = Resources.Load<Material>(@"Materials/OutlineMask");
-    var fillSrc = Resources.Load<Material>(@"Materials/OutlineFill");
-
-    if (maskSrc == null)
-    {
-        var maskShader = Shader.Find("Hidden/QuickOutline/OutlineMask");
-        if (maskShader != null) maskSrc = new Material(maskShader) { name = "OutlineMask (Auto)" };
-    }
-    if (fillSrc == null)
-    {
-        var fillShader = Shader.Find("Hidden/QuickOutline/OutlineFill");
-        if (fillShader != null) fillSrc = new Material(fillShader) { name = "OutlineFill (Auto)" };
-    }
-    if (maskSrc == null || fillSrc == null)
-    {
-        Debug.LogWarning("[QuickOutline] Outline materials/shaders missing. Disabling outline.");
-        enabled = false;
-        return;
-    }
-    outlineMaskMaterial = Instantiate(maskSrc);
-    outlineFillMaterial = Instantiate(fillSrc);
-
-    outlineMaskMaterial.name = "OutlineMask (Instance)";
-    outlineFillMaterial.name = "OutlineFill (Instance)";
-
     // Retrieve or generate smooth normals
     LoadSmoothNormals();
 
     // Apply material properties immediately
     needsUpdate = true;
+
+    // Initialize materials if available; otherwise we'll retry later (e.g., during PlayMode test startup).
+    TryEnsureMaterials();
   }
 
   void OnEnable() {
-    if (outlineMaskMaterial == null || outlineFillMaterial == null || renderers == null || renderers.Length == 0) {
-      enabled = false;
-      return;
+    if (renderers == null || renderers.Length == 0) renderers = GetComponentsInChildren<Renderer>();
+    if (!TryEnsureMaterials()) return;
+    ApplyMaterialsToRenderers();
+  }
+
+  private bool TryEnsureMaterials() {
+    if (outlineMaskMaterial != null && outlineFillMaterial != null) return true;
+
+    // Instantiate outline materials (gracefully fall back to runtime-created materials)
+    var maskSrc = Resources.Load<Material>(@"Materials/OutlineMask");
+    var fillSrc = Resources.Load<Material>(@"Materials/OutlineFill");
+
+    if (maskSrc == null) {
+      var maskShader = Shader.Find(MaskShaderName);
+      if (maskShader != null) maskSrc = new Material(maskShader) { name = "OutlineMask (Auto)" };
     }
+    if (fillSrc == null) {
+      var fillShader = Shader.Find(FillShaderName);
+      if (fillShader != null) fillSrc = new Material(fillShader) { name = "OutlineFill (Auto)" };
+    }
+
+    if (maskSrc == null || fillSrc == null) {
+      if (!loggedMissingOnce) {
+        loggedMissingOnce = true;
+        Debug.LogWarning("[QuickOutline] Outline materials/shaders missing. Outline will retry later.");
+      }
+      return false;
+    }
+
+    // Clean up any half-initialized material instances.
+    if (outlineMaskMaterial != null) Destroy(outlineMaskMaterial);
+    if (outlineFillMaterial != null) Destroy(outlineFillMaterial);
+
+    outlineMaskMaterial = Instantiate(maskSrc);
+    outlineFillMaterial = Instantiate(fillSrc);
+
+    outlineMaskMaterial.name = "OutlineMask (Instance)";
+    outlineFillMaterial.name = "OutlineFill (Instance)";
+    materialsApplied = false;
+    needsUpdate = true;
+    return true;
+  }
+
+  private void ApplyMaterialsToRenderers() {
+    if (outlineMaskMaterial == null || outlineFillMaterial == null || renderers == null || renderers.Length == 0) return;
     foreach (var renderer in renderers) {
 
       // Ensure we don't accumulate duplicate outline materials across enable/disable cycles.
@@ -143,6 +163,7 @@ public class Outline : MonoBehaviour {
       materials.Add(outlineFillMaterial);
       renderer.materials = materials.ToArray();
     }
+    materialsApplied = true;
   }
 
   void OnValidate() {
@@ -163,10 +184,9 @@ public class Outline : MonoBehaviour {
   }
 
   void Update() {
-    if (outlineMaskMaterial == null || outlineFillMaterial == null || renderers == null || renderers.Length == 0) {
-      enabled = false;
-      return;
-    }
+    if (renderers == null || renderers.Length == 0) renderers = GetComponentsInChildren<Renderer>();
+    if (!TryEnsureMaterials()) return;
+    if (!materialsApplied) ApplyMaterialsToRenderers();
     if (needsUpdate) {
       needsUpdate = false;
 
@@ -175,9 +195,7 @@ public class Outline : MonoBehaviour {
   }
 
   void OnDisable() {
-    if (outlineMaskMaterial == null || outlineFillMaterial == null || renderers == null || renderers.Length == 0) {
-      return;
-    }
+    if (renderers == null || renderers.Length == 0) renderers = GetComponentsInChildren<Renderer>();
     foreach (var renderer in renderers) {
 
       // Remove any outline materials by shader (covers duplicated/instanced cases).
@@ -185,6 +203,7 @@ public class Outline : MonoBehaviour {
       materials.RemoveAll(IsOutlineMaterial);
       renderer.materials = materials.ToArray();
     }
+    materialsApplied = false;
   }
 
   void OnDestroy() {

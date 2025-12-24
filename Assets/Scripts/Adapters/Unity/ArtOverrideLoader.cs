@@ -13,6 +13,7 @@ public sealed class ArtOverrideLoader : MonoBehaviour
     [SerializeField] private bool disableCollidersOnOverride = true;
     [SerializeField] private bool clearArtRootChildren = true;
     [SerializeField] private bool refitRootColliderToOverrideBounds = true;
+    [SerializeField] private bool debugLog;
 
     private GameObject _overrideInstance;
 
@@ -26,7 +27,11 @@ public sealed class ArtOverrideLoader : MonoBehaviour
         if (string.IsNullOrWhiteSpace(overrideResourcePath)) return false;
 
         var overridePrefab = Resources.Load<GameObject>(overrideResourcePath);
-        if (overridePrefab == null) return false;
+        if (overridePrefab == null)
+        {
+            if (debugLog) Debug.LogWarning($"[ArtOverrideLoader] Resources.Load failed: '{overrideResourcePath}' on {name}");
+            return false;
+        }
 
         var artRoot = GetOrCreateArtRoot();
         if (clearArtRootChildren) ClearChildren(artRoot);
@@ -53,6 +58,7 @@ public sealed class ArtOverrideLoader : MonoBehaviour
             TryRefitRootColliderToArtBounds(artRoot);
         }
 
+        if (debugLog) Debug.Log($"[ArtOverrideLoader] Applied '{overrideResourcePath}' to {name}");
         return true;
     }
 
