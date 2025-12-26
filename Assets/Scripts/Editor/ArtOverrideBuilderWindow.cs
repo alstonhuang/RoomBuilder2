@@ -102,6 +102,16 @@ namespace MyGame.EditorTools
                 return;
             }
 
+            if (_sourceAsset.GetComponentInChildren<ArtOverrideLoader>(true) != null)
+            {
+                EditorUtility.DisplayDialog(
+                    "Invalid Source",
+                    "Selected prefab contains ArtOverrideLoader.\n\n" +
+                    "For art overrides, select a model/art prefab (e.g., a mesh prefab) instead of a gameplay prefab.",
+                    "OK");
+                return;
+            }
+
             if (string.IsNullOrEmpty(_overrideName))
             {
                 EditorUtility.DisplayDialog("Missing Override Name", "Enter an override name (e.g., KeyArt).", "OK");
@@ -141,4 +151,3 @@ namespace MyGame.EditorTools
         }
     }
 }
-

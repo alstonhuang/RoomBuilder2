@@ -29,6 +29,16 @@ namespace MyGame.EditorTools
                 return;
             }
 
+            if (selected.GetComponentInChildren<ArtOverrideLoader>(true) != null)
+            {
+                EditorUtility.DisplayDialog(
+                    "Invalid Source",
+                    "Selected prefab contains ArtOverrideLoader.\n\n" +
+                    "For art overrides, select a model/art prefab (e.g., a mesh prefab) instead of a gameplay prefab.",
+                    "OK");
+                return;
+            }
+
             EnsureAssetFolderExists(OverridesFolderPath);
 
             string outPath = EditorUtility.SaveFilePanelInProject(

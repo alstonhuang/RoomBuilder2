@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 [DisallowMultipleComponent]
 public sealed class ArtOverrideLoader : MonoBehaviour
 {
+    private static readonly HashSet<string> ApplyingResourcePaths = new HashSet<string>(StringComparer.Ordinal);
+
     [Header("Art Override (Resources)")]
     [SerializeField] private string overrideResourcePath = "RoomBuilder2Overrides/KeyArt";
     [SerializeField] private string artRootName = "Art";
@@ -26,6 +29,16 @@ public sealed class ArtOverrideLoader : MonoBehaviour
     {
         if (string.IsNullOrWhiteSpace(overrideResourcePath)) return false;
 
+        // Guard against recursive overrides (e.g., if an override prefab itself contains an ArtOverrideLoader
+        // pointing to the same resource path).
+        if (!ApplyingResourcePaths.Add(overrideResourcePath))
+        {
+            if (debugLog) Debug.LogWarning($"[ArtOverrideLoader] Skipped recursive apply: '{overrideResourcePath}' on {name}");
+            return false;
+        }
+
+        try
+        {
         var overridePrefab = Resources.Load<GameObject>(overrideResourcePath);
         if (overridePrefab == null)
         {
@@ -38,6 +51,13 @@ public sealed class ArtOverrideLoader : MonoBehaviour
 
         _overrideInstance = Instantiate(overridePrefab, artRoot, worldPositionStays: false);
         _overrideInstance.name = overridePrefab.name;
+
+        // Avoid any override prefabs bringing their own override loaders (or other behaviours) into the scene.
+        foreach (var loader in _overrideInstance.GetComponentsInChildren<ArtOverrideLoader>(includeInactive: true))
+        {
+            if (loader == this) continue;
+            loader.enabled = false;
+        }
 
         if (disableCollidersOnOverride)
         {
@@ -60,6 +80,11 @@ public sealed class ArtOverrideLoader : MonoBehaviour
 
         if (debugLog) Debug.Log($"[ArtOverrideLoader] Applied '{overrideResourcePath}' to {name}");
         return true;
+        }
+        finally
+        {
+            ApplyingResourcePaths.Remove(overrideResourcePath);
+        }
     }
 
     private Transform GetOrCreateArtRoot()
