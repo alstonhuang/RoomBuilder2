@@ -44,6 +44,10 @@
   - Cup ends on table top
   - Focus highlight always visible (outline or fallback)
 
+## Known Issue
+
+- Door (DoorSystem / DoorSystem_Modular) outline may not show after swapping door art; treat fallback highlight as the current reliable focus indicator until the door art pipeline is unified with the key override workflow.
+
 ## Planned Next Step (Phase 2, not implemented yet)
 
 - **Reskin / ArtSet**: keep the same `RoomBlueprint` and rebuild scene with different visual sets.

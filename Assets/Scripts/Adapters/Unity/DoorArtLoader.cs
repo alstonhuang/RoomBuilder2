@@ -196,7 +196,100 @@ namespace MyGame.Adapters.Unity
                 }
 
                 ApplyOffsetAndScale(instance.transform, offset, scaleMult);
+
+                if (slot == doorSlot)
+                {
+                    EnsureNonTriggerCollider(instance);
+                }
             }
+        }
+
+        private static void EnsureNonTriggerCollider(GameObject go)
+        {
+            if (go == null) return;
+
+            var existing = go.GetComponentInChildren<Collider>(includeInactive: true);
+            if (existing != null)
+            {
+                existing.isTrigger = false;
+                existing.enabled = true;
+                return;
+            }
+
+            if (!TryComputeWorldBounds(go.transform, out var worldBounds))
+            {
+                var fallback = go.AddComponent<BoxCollider>();
+                fallback.isTrigger = false;
+                fallback.center = Vector3.zero;
+                fallback.size = Vector3.one;
+                return;
+            }
+
+            var localBounds = WorldBoundsToLocalAabb(go.transform, worldBounds);
+            if (localBounds.size.sqrMagnitude <= 0f)
+            {
+                var fallback = go.AddComponent<BoxCollider>();
+                fallback.isTrigger = false;
+                fallback.center = Vector3.zero;
+                fallback.size = Vector3.one;
+                return;
+            }
+
+            var box = go.AddComponent<BoxCollider>();
+            box.isTrigger = false;
+            box.center = localBounds.center;
+            box.size = localBounds.size;
+        }
+
+        private static bool TryComputeWorldBounds(Transform root, out Bounds bounds)
+        {
+            bounds = default;
+            bool hasAny = false;
+
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            foreach (var r in renderers)
+            {
+                if (r == null) continue;
+                if (!r.enabled) continue;
+
+                if (!hasAny)
+                {
+                    bounds = r.bounds;
+                    hasAny = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(r.bounds);
+                }
+            }
+
+            return hasAny;
+        }
+
+        private static Bounds WorldBoundsToLocalAabb(Transform localSpace, Bounds worldBounds)
+        {
+            Vector3 min = worldBounds.min;
+            Vector3 max = worldBounds.max;
+            var worldCorners = new Vector3[8]
+            {
+                new Vector3(min.x, min.y, min.z),
+                new Vector3(min.x, min.y, max.z),
+                new Vector3(min.x, max.y, min.z),
+                new Vector3(min.x, max.y, max.z),
+                new Vector3(max.x, min.y, min.z),
+                new Vector3(max.x, min.y, max.z),
+                new Vector3(max.x, max.y, min.z),
+                new Vector3(max.x, max.y, max.z),
+            };
+
+            Vector3 first = localSpace.InverseTransformPoint(worldCorners[0]);
+            var local = new Bounds(first, Vector3.zero);
+            for (int i = 1; i < worldCorners.Length; i++)
+            {
+                local.Encapsulate(localSpace.InverseTransformPoint(worldCorners[i]));
+            }
+
+            return local;
         }
 
         private void StripLeafControlComponents(GameObject leaf)

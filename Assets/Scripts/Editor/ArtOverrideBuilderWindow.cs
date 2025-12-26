@@ -9,6 +9,7 @@ namespace MyGame.EditorTools
     {
         private GameObject _sourceAsset;
         private string _overrideName = "KeyArt";
+        private bool _ensureReadableMeshes = true;
 
         [MenuItem("Tools/Art/Art Override Builder...")]
         public static void Open()
@@ -72,6 +73,14 @@ namespace MyGame.EditorTools
                 EditorGUILayout.TextField("Resources.Load Path", resourcePath);
                 EditorGUILayout.TextField("Output Prefab Path", outPath);
             }
+
+            EditorGUILayout.Space(6);
+
+            _ensureReadableMeshes = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    "Ensure meshes are Read/Write enabled (recommended for outline)",
+                    "QuickOutline needs mesh Read/Write to bake smooth normals and combine submeshes. This changes import settings on the selected art assets."),
+                _ensureReadableMeshes);
 
             EditorGUILayout.Space(10);
 
@@ -137,6 +146,11 @@ namespace MyGame.EditorTools
             if (!string.IsNullOrEmpty(outDir))
             {
                 KeyArtInstaller.EnsureAssetFolderExistsPublic(outDir);
+            }
+
+            if (_ensureReadableMeshes)
+            {
+                KeyArtInstaller.EnsureReadableMeshesForOutlinePublic(_sourceAsset);
             }
 
             string sourcePath = AssetDatabase.GetAssetPath(_sourceAsset);

@@ -53,15 +53,22 @@ public class Interactable : MonoBehaviour
     public void OnFocus()
     {
         EnsureOutlineCached();
-        if (outlineScript != null) outlineScript.enabled = true;
-        if (useFallbackHighlight) SetFallbackHighlight(true);
+
+        if (outlineScript != null)
+        {
+            outlineScript.RefreshRenderers();
+        }
+
+        bool hasOutline = outlineScript != null && outlineScript.HasCompatibleRenderers;
+        if (hasOutline) outlineScript.enabled = true;
+        if (useFallbackHighlight && !hasOutline) SetFallbackHighlight(true);
         if (debugFocus) Debug.Log($"[Interactable] Focus {name} outline={(outlineScript != null ? "on" : "missing")}");
     }
 
     public void OnLoseFocus()
     {
         if (outlineScript != null) outlineScript.enabled = false;
-        if (useFallbackHighlight) SetFallbackHighlight(false);
+        SetFallbackHighlight(false);
     }
 
     private void EnsureOutlineCached()
@@ -80,9 +87,9 @@ public class Interactable : MonoBehaviour
 
         if (outlineScript != null)
         {
-            outlineScript.OutlineMode = Outline.Mode.OutlineAll;
+            outlineScript.OutlineMode = Outline.Mode.OutlineVisible;
             outlineScript.OutlineColor = Color.yellow;
-            outlineScript.OutlineWidth = 5f;
+            outlineScript.OutlineWidth = 2f;
             outlineScript.enabled = false;
         }
     }

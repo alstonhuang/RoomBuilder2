@@ -59,7 +59,14 @@
   - `Tools/Tests/Force Clear Active Run Lock (Stuck Fix)`
   - 或 `Tools/Tests/Restore Last Captured Scenes Now` 強制回復原本場景
 
+## Known Issues
+- Door (DoorSystem / DoorSystem_Modular) outline may not show after swapping door art; workaround: rely on fallback highlight for now, or ensure the final DoorLeaf instance has a non-trigger `Collider` + `Renderer` and re-enter Play Mode.
+
 ## Changelog
+
+### v0.6.7
+- Art override workflow: safer runtime apply + editor tooling; improved outline refresh for runtime-instantiated art.
+- Known issue: door outline can disappear after door art swaps (see above).
 
 ### v0.6.6
 - AllTestsRunner：一鍵跑 Edit/Play/Player 並輸出 XML 報告，並加入卡住修復與場景回復工具

@@ -1,15 +1,23 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
 
 [DisallowMultipleComponent]
 public sealed class ArtOverrideLoader : MonoBehaviour
 {
     private static readonly HashSet<string> ApplyingResourcePaths = new HashSet<string>(StringComparer.Ordinal);
+    private static int ApplyDepth;
+    private const int MaxApplyDepth = 8;
 
     [Header("Art Override (Resources)")]
     [SerializeField] private string overrideResourcePath = "RoomBuilder2Overrides/KeyArt";
     [SerializeField] private string artRootName = "Art";
+
+    [Header("When To Apply")]
+    [SerializeField] private bool applyOnStart = true;
+    [SerializeField] private int deferFrames;
+    [SerializeField] private bool applyInEditMode;
 
     [Header("Safety")]
     [SerializeField] private bool disablePlaceholderRendererWhenOverridePresent = true;
@@ -19,18 +27,43 @@ public sealed class ArtOverrideLoader : MonoBehaviour
     [SerializeField] private bool debugLog;
 
     private GameObject _overrideInstance;
+    private bool _isApplying;
 
     private void Awake()
     {
+        if (!applyInEditMode && !Application.isPlaying) return;
+
+        if (!applyOnStart)
+        {
+            ApplyOverrideIfPresent();
+        }
+    }
+
+    private IEnumerator Start()
+    {
+        if (!applyOnStart) yield break;
+        if (!applyInEditMode && !Application.isPlaying) yield break;
+
+        int frames = Mathf.Max(0, deferFrames);
+        for (int i = 0; i < frames; i++) yield return null;
+
         ApplyOverrideIfPresent();
     }
 
     public bool ApplyOverrideIfPresent()
     {
+        if (!applyInEditMode && !Application.isPlaying) return false;
         if (string.IsNullOrWhiteSpace(overrideResourcePath)) return false;
+        if (_isApplying) return false;
 
         // Guard against recursive overrides (e.g., if an override prefab itself contains an ArtOverrideLoader
         // pointing to the same resource path).
+        if (ApplyDepth >= MaxApplyDepth)
+        {
+            Debug.LogError($"[ArtOverrideLoader] Aborted: recursive apply depth exceeded ({MaxApplyDepth}). Resource='{overrideResourcePath}' on {name}");
+            return false;
+        }
+
         if (!ApplyingResourcePaths.Add(overrideResourcePath))
         {
             if (debugLog) Debug.LogWarning($"[ArtOverrideLoader] Skipped recursive apply: '{overrideResourcePath}' on {name}");
@@ -39,50 +72,56 @@ public sealed class ArtOverrideLoader : MonoBehaviour
 
         try
         {
-        var overridePrefab = Resources.Load<GameObject>(overrideResourcePath);
-        if (overridePrefab == null)
-        {
-            if (debugLog) Debug.LogWarning($"[ArtOverrideLoader] Resources.Load failed: '{overrideResourcePath}' on {name}");
-            return false;
-        }
+            _isApplying = true;
+            ApplyDepth++;
 
-        var artRoot = GetOrCreateArtRoot();
-        if (clearArtRootChildren) ClearChildren(artRoot);
-
-        _overrideInstance = Instantiate(overridePrefab, artRoot, worldPositionStays: false);
-        _overrideInstance.name = overridePrefab.name;
-
-        // Avoid any override prefabs bringing their own override loaders (or other behaviours) into the scene.
-        foreach (var loader in _overrideInstance.GetComponentsInChildren<ArtOverrideLoader>(includeInactive: true))
-        {
-            if (loader == this) continue;
-            loader.enabled = false;
-        }
-
-        if (disableCollidersOnOverride)
-        {
-            foreach (var c in _overrideInstance.GetComponentsInChildren<Collider>(includeInactive: true))
+            var overridePrefab = Resources.Load<GameObject>(overrideResourcePath);
+            if (overridePrefab == null)
             {
-                c.enabled = false;
+                if (debugLog) Debug.LogWarning($"[ArtOverrideLoader] Resources.Load failed: '{overrideResourcePath}' on {name}");
+                return false;
             }
-        }
 
-        if (disablePlaceholderRendererWhenOverridePresent)
-        {
-            var placeholder = GetComponent<Renderer>();
-            if (placeholder != null) placeholder.enabled = false;
-        }
+            if (overridePrefab.GetComponentInChildren<ArtOverrideLoader>(includeInactive: true) != null)
+            {
+                Debug.LogError($"[ArtOverrideLoader] Aborted: override prefab '{overridePrefab.name}' contains ArtOverrideLoader (must be art-only). Resource='{overrideResourcePath}' on {name}");
+                return false;
+            }
 
-        if (refitRootColliderToOverrideBounds)
-        {
-            TryRefitRootColliderToArtBounds(artRoot);
-        }
+            var artRoot = GetOrCreateArtRoot();
+            if (clearArtRootChildren) ClearChildren(artRoot);
 
-        if (debugLog) Debug.Log($"[ArtOverrideLoader] Applied '{overrideResourcePath}' to {name}");
-        return true;
+            _overrideInstance = Instantiate(overridePrefab, artRoot, worldPositionStays: false);
+            _overrideInstance.name = overridePrefab.name;
+
+            RefreshOutlinesUnderRoot();
+
+            if (disableCollidersOnOverride)
+            {
+                foreach (var c in _overrideInstance.GetComponentsInChildren<Collider>(includeInactive: true))
+                {
+                    c.enabled = false;
+                }
+            }
+
+            if (disablePlaceholderRendererWhenOverridePresent)
+            {
+                var placeholder = GetComponent<Renderer>();
+                if (placeholder != null) placeholder.enabled = false;
+            }
+
+            if (refitRootColliderToOverrideBounds)
+            {
+                TryRefitRootColliderToArtBounds(artRoot);
+            }
+
+            if (debugLog) Debug.Log($"[ArtOverrideLoader] Applied '{overrideResourcePath}' to {name}");
+            return true;
         }
         finally
         {
+            if (ApplyDepth > 0) ApplyDepth--;
+            _isApplying = false;
             ApplyingResourcePaths.Remove(overrideResourcePath);
         }
     }
@@ -180,5 +219,15 @@ public sealed class ArtOverrideLoader : MonoBehaviour
         }
 
         return local;
+    }
+
+    private void RefreshOutlinesUnderRoot()
+    {
+        var outlines = GetComponentsInChildren<Outline>(includeInactive: true);
+        foreach (var outline in outlines)
+        {
+            if (outline == null) continue;
+            outline.RefreshRenderers();
+        }
     }
 }

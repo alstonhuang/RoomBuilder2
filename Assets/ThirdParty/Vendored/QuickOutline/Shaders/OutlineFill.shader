@@ -29,6 +29,7 @@ Shader "Hidden/QuickOutline/OutlineFill" {
             struct appdata {
                 float4 vertex : POSITION;
                 float3 normal : NORMAL;
+                float3 smoothNormal : TEXCOORD3;
             };
 
             struct v2f {
@@ -37,7 +38,11 @@ Shader "Hidden/QuickOutline/OutlineFill" {
 
             v2f vert (appdata v) {
                 v2f o;
-                float3 norm = normalize(UnityObjectToWorldNormal(v.normal));
+                float3 n = v.smoothNormal;
+                // When smooth normals are not baked (e.g., non-readable meshes), Unity leaves TEXCOORD3 empty.
+                // Fall back to the mesh normal in that case.
+                if (dot(n, n) < 1e-6) n = v.normal;
+                float3 norm = normalize(UnityObjectToWorldNormal(n));
                 float3 pos = mul(unity_ObjectToWorld, v.vertex).xyz;
                 pos += norm * _OutlineWidth * 0.01; // 0.01 to keep width in reasonable units
                 o.pos = UnityObjectToClipPos(float4(pos,1));

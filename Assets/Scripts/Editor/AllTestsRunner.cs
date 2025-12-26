@@ -116,6 +116,14 @@ namespace MyGame.EditorTools
                 if (_finalized) return;
                 if (_awaitingRunFinished)
                 {
+                    // If we returned to EditMode while still awaiting results, the run was likely aborted (e.g., user pressed Stop).
+                    // Avoid re-entering play mode in a loop; require Unity Test Framework to report an active run before retrying.
+                    if (!IsUnityTestFrameworkRunActive())
+                    {
+                        CancelInternal("Canceled: PlayMode exited while awaiting test results (likely aborted).");
+                        return;
+                    }
+
                     QueueRunNext();
                     return;
                 }

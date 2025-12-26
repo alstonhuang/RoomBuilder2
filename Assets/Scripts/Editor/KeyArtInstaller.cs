@@ -61,8 +61,36 @@ namespace MyGame.EditorTools
                 return;
             }
 
+            EnsureReadableMeshesForOutline(selected);
             BuildArtOverrideFromModel(selected, selectedPath, outPath);
             Debug.Log($"[KeyArtInstaller] Built art override '{outPath}' (Resources.Load(\"{resourcePath}\")).");
+        }
+
+        [MenuItem("Tools/Art/Fix ReadWrite For Selected Art Assets")]
+        public static void FixReadWriteForSelectedArtAssets()
+        {
+            var selected = Selection.objects;
+            if (selected == null || selected.Length == 0)
+            {
+                EditorUtility.DisplayDialog("Nothing Selected", "Select a prefab/model asset in the Project window.", "OK");
+                return;
+            }
+
+            int updated = 0;
+            foreach (var o in selected)
+            {
+                if (o is GameObject go && PrefabUtility.IsPartOfPrefabAsset(go))
+                {
+                    updated += EnsureReadableMeshesForOutline(go);
+                }
+            }
+
+            EditorUtility.DisplayDialog(
+                "Read/Write Update",
+                updated > 0
+                    ? $"Updated Read/Write on {updated} model import(s)."
+                    : "No changes needed (already readable, or meshes are not model imports).",
+                "OK");
         }
 
         [MenuItem("Tools/Art/Validate Selected Art Override Prefab")]
@@ -198,6 +226,57 @@ namespace MyGame.EditorTools
         public static void BuildArtOverrideFromModelPublic(GameObject model, string modelPathForLog, string outPrefabAssetPath)
         {
             BuildArtOverrideFromModel(model, modelPathForLog, outPrefabAssetPath);
+        }
+
+        public static void EnsureReadableMeshesForOutlinePublic(GameObject sourcePrefabOrModel)
+        {
+            EnsureReadableMeshesForOutline(sourcePrefabOrModel);
+        }
+
+        private static int EnsureReadableMeshesForOutline(GameObject sourcePrefabOrModel)
+        {
+            if (sourcePrefabOrModel == null) return 0;
+
+            var meshes = new HashSet<Mesh>();
+            foreach (var mf in sourcePrefabOrModel.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf == null) continue;
+                if (mf.sharedMesh == null) continue;
+                meshes.Add(mf.sharedMesh);
+            }
+            foreach (var smr in sourcePrefabOrModel.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr == null) continue;
+                if (smr.sharedMesh == null) continue;
+                meshes.Add(smr.sharedMesh);
+            }
+
+            int updated = 0;
+            foreach (var mesh in meshes)
+            {
+                if (mesh == null) continue;
+                if (mesh.isReadable) continue;
+
+                string meshPath = AssetDatabase.GetAssetPath(mesh);
+                if (string.IsNullOrEmpty(meshPath)) continue;
+
+                var importer = AssetImporter.GetAtPath(meshPath) as ModelImporter;
+                if (importer == null) continue;
+
+                if (!importer.isReadable)
+                {
+                    importer.isReadable = true;
+                    importer.SaveAndReimport();
+                    updated++;
+                }
+            }
+
+            if (updated > 0)
+            {
+                Debug.Log($"[KeyArtInstaller] Enabled Read/Write on {updated} model import(s) for outline support.");
+            }
+
+            return updated;
         }
 
         public static void EnsureAssetFolderExistsPublic(string folderPath)

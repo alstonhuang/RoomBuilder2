@@ -85,6 +85,8 @@ public class Outline : MonoBehaviour {
   private bool materialsApplied;
   private bool loggedMissingOnce;
 
+  public bool HasCompatibleRenderers { get; private set; } = true;
+
   private static bool IsOutlineMaterial(Material material) {
     if (material == null) return false;
     var shader = material.shader;
@@ -97,6 +99,7 @@ public class Outline : MonoBehaviour {
 
     // Cache renderers
     renderers = GetComponentsInChildren<Renderer>();
+    HasCompatibleRenderers = ComputeHasCompatibleRenderers();
 
     // Retrieve or generate smooth normals
     LoadSmoothNormals();
@@ -110,6 +113,23 @@ public class Outline : MonoBehaviour {
 
   void OnEnable() {
     if (renderers == null || renderers.Length == 0) renderers = GetComponentsInChildren<Renderer>();
+    HasCompatibleRenderers = ComputeHasCompatibleRenderers();
+    if (!TryEnsureMaterials()) return;
+    ApplyMaterialsToRenderers();
+  }
+
+  public void RefreshRenderers() {
+    renderers = GetComponentsInChildren<Renderer>();
+    HasCompatibleRenderers = ComputeHasCompatibleRenderers();
+
+    // If renderers were added at runtime (e.g., an art override instantiated after Awake),
+    // adopt any newly-seen meshes (skips non-readable meshes gracefully).
+    LoadSmoothNormals();
+
+    materialsApplied = false;
+    needsUpdate = true;
+
+    if (!isActiveAndEnabled) return;
     if (!TryEnsureMaterials()) return;
     ApplyMaterialsToRenderers();
   }
@@ -155,6 +175,9 @@ public class Outline : MonoBehaviour {
   private void ApplyMaterialsToRenderers() {
     if (outlineMaskMaterial == null || outlineFillMaterial == null || renderers == null || renderers.Length == 0) return;
     foreach (var renderer in renderers) {
+      if (!IsRendererCompatible(renderer)) {
+        continue;
+      }
 
       // Ensure we don't accumulate duplicate outline materials across enable/disable cycles.
       var materials = renderer.materials.ToList();
@@ -206,6 +229,29 @@ public class Outline : MonoBehaviour {
     materialsApplied = false;
   }
 
+  private bool ComputeHasCompatibleRenderers() {
+    if (renderers == null || renderers.Length == 0) return false;
+    foreach (var r in renderers) {
+      if (IsRendererCompatible(r)) return true;
+    }
+    return false;
+  }
+
+  private static bool IsRendererCompatible(Renderer r) {
+    if (r == null) return false;
+
+    if (r is SkinnedMeshRenderer smr) {
+      var mesh = smr.sharedMesh;
+      if (mesh == null) return false;
+      return true;
+    }
+
+    var mf = r.GetComponent<MeshFilter>();
+    var shared = mf != null ? mf.sharedMesh : null;
+    if (shared == null) return false;
+    return true;
+  }
+
   void OnDestroy() {
 
     // Destroy material instances
@@ -219,9 +265,14 @@ public class Outline : MonoBehaviour {
     var bakedMeshes = new HashSet<Mesh>();
 
     foreach (var meshFilter in GetComponentsInChildren<MeshFilter>()) {
+      if (meshFilter.sharedMesh == null) continue;
 
       // Skip duplicates
       if (!bakedMeshes.Add(meshFilter.sharedMesh)) {
+        continue;
+      }
+
+      if (!meshFilter.sharedMesh.isReadable) {
         continue;
       }
 
@@ -237,9 +288,15 @@ public class Outline : MonoBehaviour {
 
     // Retrieve or generate smooth normals
     foreach (var meshFilter in GetComponentsInChildren<MeshFilter>()) {
+      if (meshFilter.sharedMesh == null) continue;
 
       // Skip if smooth normals have already been adopted
       if (!registeredMeshes.Add(meshFilter.sharedMesh)) {
+        continue;
+      }
+
+      // Skip meshes that are not readable. (Some downloaded models ship with Read/Write disabled.)
+      if (!meshFilter.sharedMesh.isReadable) {
         continue;
       }
 
@@ -260,9 +317,14 @@ public class Outline : MonoBehaviour {
 
     // Clear UV3 on skinned mesh renderers
     foreach (var skinnedMeshRenderer in GetComponentsInChildren<SkinnedMeshRenderer>()) {
+      if (skinnedMeshRenderer.sharedMesh == null) continue;
 
       // Skip if UV3 has already been reset
       if (!registeredMeshes.Add(skinnedMeshRenderer.sharedMesh)) {
+        continue;
+      }
+
+      if (!skinnedMeshRenderer.sharedMesh.isReadable) {
         continue;
       }
 
@@ -309,6 +371,8 @@ public class Outline : MonoBehaviour {
   }
 
   void CombineSubmeshes(Mesh mesh, Material[] materials) {
+    if (mesh == null) return;
+    if (!mesh.isReadable) return;
 
     // Skip meshes with a single submesh
     if (mesh.subMeshCount == 1) {
